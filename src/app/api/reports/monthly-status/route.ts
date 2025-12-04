@@ -7,7 +7,7 @@ import {
   getAllBranches,
   getAllDepartments
 } from '@/lib/db/queries';
-import type { ApiResponse, Entity, Branch, Department } from '@/types';
+import type { ApiResponse, Entity, Branch, Department, SafeEmployee, WorkReport } from '@/types';
 
 interface EmployeeReportStatus {
   employeeId: string;

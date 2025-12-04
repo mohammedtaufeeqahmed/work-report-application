@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser, setSessionCookie, employeeToSessionUser } from '@/lib/auth';
-import type { LoginCredentials, ApiResponse, SafeEmployee } from '@/types';
+import type { LoginCredentials, ApiResponse, SafeEmployee, PageAccess } from '@/types';
+import { DEFAULT_PAGE_ACCESS } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +36,18 @@ export async function POST(request: NextRequest) {
     const sessionUser = employeeToSessionUser(result.user);
     await setSessionCookie(sessionUser);
 
+    // Parse pageAccess from JSON string or use default based on role
+    let pageAccess: PageAccess | null = null;
+    if (result.user.pageAccess) {
+      try {
+        pageAccess = JSON.parse(result.user.pageAccess) as PageAccess;
+      } catch {
+        pageAccess = DEFAULT_PAGE_ACCESS[result.user.role];
+      }
+    } else {
+      pageAccess = DEFAULT_PAGE_ACCESS[result.user.role];
+    }
+
     // Return user data (without password)
     const safeUser: SafeEmployee = {
       id: result.user.id,
@@ -46,6 +59,7 @@ export async function POST(request: NextRequest) {
       branchId: result.user.branchId,
       role: result.user.role,
       status: result.user.status,
+      pageAccess,
       createdBy: result.user.createdBy,
       createdAt: result.user.createdAt,
       updatedAt: result.user.updatedAt,
