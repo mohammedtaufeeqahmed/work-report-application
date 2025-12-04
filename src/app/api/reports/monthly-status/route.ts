@@ -1,0 +1,186 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getSession, hasRole } from '@/lib/auth';
+import { 
+  getAllEmployees,
+  getWorkReportsByDateRange,
+  getAllEntities,
+  getAllBranches,
+  getAllDepartments
+} from '@/lib/db/queries';
+import type { ApiResponse, Entity, Branch, Department } from '@/types';
+
+interface EmployeeReportStatus {
+  employeeId: string;
+  name: string;
+  department: string;
+  entityId: number | null;
+  branchId: number | null;
+  dailyStatus: Record<string, 'submitted' | 'leave' | 'not_submitted' | 'sunday' | 'future'>;
+  submittedCount: number;
+  workingDaysCount: number;
+}
+
+interface MonthlyStatusResponse {
+  employees: EmployeeReportStatus[];
+  daysInMonth: number;
+  year: number;
+  month: number;
+  entities: Entity[];
+  branches: Branch[];
+  departments: Department[];
+}
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function isSunday(year: number, month: number, day: number): boolean {
+  const date = new Date(year, month - 1, day);
+  return date.getDay() === 0;
+}
+
+function formatDateString(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSession();
+    
+    // Allow superadmin, admin, manager, and boardmember to access this endpoint
+    const canViewReports = hasRole(session, ['superadmin', 'admin', 'manager', 'boardmember']);
+    
+    if (!session || !canViewReports) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const yearParam = url.searchParams.get('year');
+    const monthParam = url.searchParams.get('month');
+    const entityId = url.searchParams.get('entityId');
+    const branchId = url.searchParams.get('branchId');
+    const department = url.searchParams.get('department');
+
+    // Default to current month if not provided
+    const now = new Date();
+    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
+    const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
+
+    const daysInMonth = getDaysInMonth(year, month);
+    const startDate = formatDateString(year, month, 1);
+    const endDate = formatDateString(year, month, daysInMonth);
+
+    // Get all employees
+    let employees: SafeEmployee[] = getAllEmployees();
+
+    // Apply filters
+    if (entityId && entityId !== 'all') {
+      employees = employees.filter(e => e.entityId === parseInt(entityId));
+    }
+    if (branchId && branchId !== 'all') {
+      employees = employees.filter(e => e.branchId === parseInt(branchId));
+    }
+    if (department && department !== 'all') {
+      employees = employees.filter(e => e.department === department);
+    }
+
+    // Filter only active employees
+    employees = employees.filter(e => e.status === 'active');
+
+    // Get all work reports for the month
+    const workReports: WorkReport[] = getWorkReportsByDateRange(startDate, endDate);
+
+    // Create a map of employee reports by date
+    const reportMap = new Map<string, WorkReport>();
+    for (const report of workReports) {
+      const key = `${report.employeeId}-${report.date}`;
+      reportMap.set(key, report);
+    }
+
+    // Get today's date for future date check
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Build employee status data
+    const employeeStatuses: EmployeeReportStatus[] = employees.map(employee => {
+      const dailyStatus: Record<string, 'submitted' | 'leave' | 'not_submitted' | 'sunday' | 'future'> = {};
+      let submittedCount = 0;
+      let workingDaysCount = 0;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = formatDateString(year, month, day);
+        const dateObj = new Date(year, month - 1, day);
+        dateObj.setHours(0, 0, 0, 0);
+        
+        if (isSunday(year, month, day)) {
+          dailyStatus[dateStr] = 'sunday';
+        } else if (dateObj > today) {
+          // Future date - mark as future, don't count
+          dailyStatus[dateStr] = 'future';
+        } else {
+          workingDaysCount++;
+          const key = `${employee.employeeId}-${dateStr}`;
+          const report = reportMap.get(key);
+          
+          if (report) {
+            if (report.status === 'leave') {
+              dailyStatus[dateStr] = 'leave';
+              submittedCount++; // Leave counts as submitted
+            } else {
+              dailyStatus[dateStr] = 'submitted';
+              submittedCount++;
+            }
+          } else {
+            dailyStatus[dateStr] = 'not_submitted';
+          }
+        }
+      }
+
+      return {
+        employeeId: employee.employeeId,
+        name: employee.name,
+        department: employee.department,
+        entityId: employee.entityId,
+        branchId: employee.branchId,
+        dailyStatus,
+        submittedCount,
+        workingDaysCount: Math.max(0, workingDaysCount),
+      };
+    });
+
+    // Sort by department, then by name
+    employeeStatuses.sort((a, b) => {
+      const deptCompare = a.department.localeCompare(b.department);
+      if (deptCompare !== 0) return deptCompare;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Get filter options
+    const entities = getAllEntities();
+    const branches = getAllBranches();
+    const departments = getAllDepartments();
+
+    return NextResponse.json<ApiResponse<MonthlyStatusResponse>>({
+      success: true,
+      data: {
+        employees: employeeStatuses,
+        daysInMonth,
+        year,
+        month,
+        entities,
+        branches,
+        departments,
+      },
+    });
+  } catch (error) {
+    console.error('Fetch monthly status error:', error);
+    return NextResponse.json<ApiResponse>(
+      { success: false, error: 'Failed to fetch monthly status' },
+      { status: 500 }
+    );
+  }
+}
+

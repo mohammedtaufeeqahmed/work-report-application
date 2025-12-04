@@ -1,0 +1,237 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { 
+  createWorkReport, 
+  getWorkReports, 
+  getWorkReportsByEmployee,
+  getWorkReportsByDateRange,
+  getWorkReportByEmployeeAndDate,
+  getWorkReportCount,
+  searchWorkReports,
+  getWorkReportsByDepartment,
+  getUniqueWorkReportDepartments,
+  getManagerDepartmentIds,
+  searchWorkReportsForManager,
+  getWorkReportsByDepartmentForManager,
+  getUniqueWorkReportDepartmentsForManager,
+  getAllDepartments
+} from '@/lib/db/queries';
+import { getSession } from '@/lib/auth';
+import type { ApiResponse, WorkReport, CreateWorkReportInput } from '@/types';
+
+// GET: Fetch work reports with optional filters
+export async function GET(request: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const url = new URL(request.url);
+    const employeeId = url.searchParams.get('employeeId');
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
+    const search = url.searchParams.get('search');
+    const department = url.searchParams.get('department');
+    const getDepartments = url.searchParams.get('getDepartments');
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+
+    // Managers, admins, and superadmins can view all reports
+    const canViewAll = session.role === 'admin' || session.role === 'superadmin' || session.role === 'manager';
+    const isManager = session.role === 'manager';
+    
+    // Return unique departments list if requested
+    if (getDepartments === 'true' && canViewAll) {
+      // For managers, only return their assigned departments
+      const departments = isManager 
+        ? getUniqueWorkReportDepartmentsForManager(session.id)
+        : getUniqueWorkReportDepartments();
+      return NextResponse.json<ApiResponse<{ departments: string[] }>>({
+        success: true,
+        data: { departments },
+      });
+    }
+    
+    if (!canViewAll && employeeId && employeeId !== session.employeeId) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'You can only view your own reports' },
+        { status: 403 }
+      );
+    }
+
+    let reports: WorkReport[];
+
+    // For managers, filter by their assigned departments
+    if (isManager) {
+      const managerDeptIds = getManagerDepartmentIds(session.id);
+      
+      if (managerDeptIds.length === 0) {
+        // Manager has no departments assigned, return empty
+        return NextResponse.json<ApiResponse<{ reports: WorkReport[]; total: number }>>({
+          success: true,
+          data: {
+            reports: [],
+            total: 0,
+          },
+        });
+      }
+      
+      // Get department names for the manager
+      const allDepts = getAllDepartments();
+      const managerDeptNames = allDepts
+        .filter(d => managerDeptIds.includes(d.id))
+        .map(d => d.name);
+      
+      // Search functionality for managers (filtered by their departments)
+      if (search) {
+        reports = searchWorkReportsForManager(search, session.id, department || undefined);
+        // Apply date filter if provided
+        if (startDate && endDate) {
+          reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+        }
+      } else if (department && department !== 'all') {
+        // Filter by department only (if manager has access)
+        if (managerDeptNames.includes(department)) {
+          reports = getWorkReportsByDepartmentForManager(department, session.id);
+          // Apply date filter if provided
+          if (startDate && endDate) {
+            reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+          }
+        } else {
+          reports = [];
+        }
+      } else if (employeeId) {
+        // Filter by employee (but only if employee is in manager's departments)
+        const empReports = getWorkReportsByEmployee(employeeId);
+        reports = empReports.filter(r => managerDeptNames.includes(r.department));
+        // Apply date filter if provided
+        if (startDate && endDate) {
+          reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+        }
+      } else if (startDate && endDate) {
+        // Filter by date range (filtered by manager's departments)
+        const dateReports = getWorkReportsByDateRange(startDate, endDate);
+        reports = dateReports.filter(r => managerDeptNames.includes(r.department));
+      } else {
+        // Get all reports from manager's departments (when "all" is selected or no filter)
+        const allReports = getWorkReports(limit, offset);
+        reports = allReports.filter(r => managerDeptNames.includes(r.department));
+        // Apply date filter if provided
+        if (startDate && endDate) {
+          reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+        }
+      }
+    } else {
+      // Search functionality for admins/superadmins (no filtering)
+      if (canViewAll && search) {
+        reports = searchWorkReports(search, department || undefined);
+      } else if (canViewAll && department && department !== 'all') {
+        // Filter by department only
+        reports = getWorkReportsByDepartment(department);
+      } else if (employeeId) {
+        // Filter by employee
+        reports = getWorkReportsByEmployee(employeeId);
+      } else if (startDate && endDate) {
+        // Filter by date range - only managers/admins can view all reports by date
+        if (!canViewAll) {
+          // For regular employees, filter by their own ID within the date range
+          reports = getWorkReportsByEmployee(session.employeeId);
+        } else {
+          reports = getWorkReportsByDateRange(startDate, endDate);
+        }
+      } else {
+        // Get all reports - only managers/admins can view all, others get their own
+        if (!canViewAll) {
+          reports = getWorkReportsByEmployee(session.employeeId);
+        } else {
+          reports = getWorkReports(limit, offset);
+        }
+      }
+    }
+
+    const totalCount = canViewAll ? getWorkReportCount() : reports.length;
+
+    return NextResponse.json<ApiResponse<{ reports: WorkReport[]; total: number }>>({
+      success: true,
+      data: {
+        reports,
+        total: totalCount,
+      },
+    });
+  } catch (error) {
+    console.error('Fetch work reports error:', error);
+    return NextResponse.json<ApiResponse>(
+      { success: false, error: 'Failed to fetch work reports' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST: Submit a new work report
+export async function POST(request: NextRequest) {
+  try {
+    const body: CreateWorkReportInput = await request.json();
+    const { employeeId, date, name, email, department, status, workReport } = body;
+
+    // Validate required fields
+    if (!employeeId || !date || !name || !email || !department || !status) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate status
+    if (status !== 'working' && status !== 'leave') {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Invalid status. Must be "working" or "leave"' },
+        { status: 400 }
+      );
+    }
+
+    // If working, work report is mandatory
+    if (status === 'working' && (!workReport || workReport.trim() === '')) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Work report is required when status is "working"' },
+        { status: 400 }
+      );
+    }
+
+    // Check for duplicate report (same employee, same date)
+    const existingReport = getWorkReportByEmployeeAndDate(employeeId, date);
+    if (existingReport) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'A work report already exists for this employee on this date' },
+        { status: 409 }
+      );
+    }
+
+    // Create the work report
+    const newReport = createWorkReport({
+      employeeId,
+      date,
+      name,
+      email,
+      department,
+      status,
+      workReport: workReport || null,
+    });
+
+    return NextResponse.json<ApiResponse<WorkReport>>({
+      success: true,
+      data: newReport,
+      message: 'Work report submitted successfully',
+    }, { status: 201 });
+  } catch (error) {
+    console.error('Submit work report error:', error);
+    return NextResponse.json<ApiResponse>(
+      { success: false, error: 'Failed to submit work report' },
+      { status: 500 }
+    );
+  }
+}
+
