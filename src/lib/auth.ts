@@ -123,7 +123,7 @@ export async function setSessionCookie(user: SessionUser): Promise<void> {
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     expires: expiresAt,
     path: '/',
