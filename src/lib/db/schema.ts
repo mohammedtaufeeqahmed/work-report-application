@@ -143,7 +143,12 @@ export function initializeSchema(): void {
       ('superadmin_can_edit_reports', 'true')
   `);
 
-  // Create indexes for better query performance
+  // ============================================
+  // Indexes for better query performance
+  // Optimized for 40-50 concurrent users
+  // ============================================
+  
+  // Basic employee indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_employees_employeeId ON employees(employeeId);
     CREATE INDEX IF NOT EXISTS idx_employees_email ON employees(email);
@@ -151,21 +156,82 @@ export function initializeSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_employees_branchId ON employees(branchId);
     CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);
     CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
-    
+  `);
+  
+  // Composite index for employee lookups (role + status - common filter combo)
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_employees_role_status ON employees(role, status);
+    CREATE INDEX IF NOT EXISTS idx_employees_entity_branch ON employees(entityId, branchId);
+  `);
+  
+  // Branch indexes
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_branches_entityId ON branches(entityId);
-    
+  `);
+  
+  // Manager departments indexes
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_manager_departments_managerId ON manager_departments(managerId);
     CREATE INDEX IF NOT EXISTS idx_manager_departments_departmentId ON manager_departments(departmentId);
-    
+  `);
+  
+  // Basic work reports indexes
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_workReports_employeeId ON workReports(employeeId);
     CREATE INDEX IF NOT EXISTS idx_workReports_date ON workReports(date);
     CREATE INDEX IF NOT EXISTS idx_workReports_status ON workReports(status);
-    
+    CREATE INDEX IF NOT EXISTS idx_workReports_department ON workReports(department);
+  `);
+  
+  // ============================================
+  // Composite indexes for common query patterns
+  // These significantly improve concurrent access
+  // ============================================
+  
+  // Most common query: check if employee submitted report for a date
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workReports_employeeId_date 
+    ON workReports(employeeId, date DESC);
+  `);
+  
+  // Date range queries with status filter (analytics)
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workReports_date_status 
+    ON workReports(date DESC, status);
+  `);
+  
+  // Department + date queries (manager dashboards)
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workReports_department_date 
+    ON workReports(department, date DESC);
+  `);
+  
+  // Full analytics composite index
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workReports_date_department_status 
+    ON workReports(date DESC, department, status);
+  `);
+  
+  // Created at for sorting (newest first)
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_workReports_createdAt 
+    ON workReports(createdAt DESC);
+  `);
+  
+  // Password reset token indexes
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_employeeId ON passwordResetTokens(employeeId);
     CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_token ON passwordResetTokens(token);
+    CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_expiresAt ON passwordResetTokens(expiresAt);
+  `);
+  
+  // Department indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_departments_entityId ON departments(entityId);
+    CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
   `);
 
-  console.log('Database schema initialized successfully');
+  console.log('[DB] Database schema initialized with optimized indexes');
 }
 
 /**

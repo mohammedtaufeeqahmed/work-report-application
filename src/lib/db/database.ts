@@ -7,9 +7,28 @@ const DB_PATH = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'w
 // Singleton database instance
 let db: Database.Database | null = null;
 
+// Database statistics interface
+export interface DatabaseStats {
+  pageCount: number;
+  pageSize: number;
+  cacheSize: number;
+  freelistCount: number;
+  walMode: string;
+  dbSizeBytes: number;
+  dbSizeMB: string;
+}
+
+// Health check result interface
+export interface HealthCheckResult {
+  healthy: boolean;
+  error?: string;
+  responseTimeMs: number;
+}
+
 /**
  * Get database instance (singleton pattern)
  * Creates the database if it doesn't exist
+ * Optimized for 40-50 concurrent users
  */
 export function getDatabase(): Database.Database {
   if (!db) {
@@ -21,13 +40,38 @@ export function getDatabase(): Database.Database {
     // Enable WAL mode for better concurrent read performance
     db.pragma('journal_mode = WAL');
     
-    // Optimize for performance
+    // ============================================
+    // Performance optimizations for 40-50 users
+    // ============================================
+    
+    // Synchronous mode: NORMAL balances speed and safety
     db.pragma('synchronous = NORMAL');
-    db.pragma('cache_size = -64000'); // 64MB cache
+    
+    // Cache size: 64MB for better read performance
+    db.pragma('cache_size = -64000');
+    
+    // Store temp tables in memory
     db.pragma('temp_store = MEMORY');
+    
+    // Wait up to 5 seconds if database is locked (reduces lock errors)
+    db.pragma('busy_timeout = 5000');
+    
+    // Memory-mapped I/O: 256MB for faster reads
+    db.pragma('mmap_size = 268435456');
+    
+    // Optimize page size for better I/O performance
+    db.pragma('page_size = 4096');
+    
+    // Run query planner optimizations
+    db.pragma('optimize');
+    
+    // Auto-vacuum: incremental to reclaim space without blocking
+    db.pragma('auto_vacuum = INCREMENTAL');
     
     // Auto-migrate: ensure all required tables exist
     ensureTablesExist(db);
+    
+    console.log('[DB] Database initialized with performance optimizations for concurrent access');
   }
   
   return db;
@@ -161,6 +205,121 @@ export function transaction<T>(fn: () => T): T {
  */
 export function isDatabaseConnected(): boolean {
   return db !== null && db.open;
+}
+
+/**
+ * Health check - verifies database connectivity
+ * Returns response time and health status
+ */
+export function healthCheck(): HealthCheckResult {
+  const startTime = performance.now();
+  try {
+    const database = getDatabase();
+    // Simple query to test connection
+    database.prepare('SELECT 1').get();
+    const responseTimeMs = performance.now() - startTime;
+    return { 
+      healthy: true, 
+      responseTimeMs: Math.round(responseTimeMs * 100) / 100 
+    };
+  } catch (error) {
+    const responseTimeMs = performance.now() - startTime;
+    return { 
+      healthy: false, 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      responseTimeMs: Math.round(responseTimeMs * 100) / 100 
+    };
+  }
+}
+
+/**
+ * Get database statistics for monitoring
+ */
+export function getDatabaseStats(): DatabaseStats {
+  const database = getDatabase();
+  const pageCount = database.pragma('page_count', { simple: true }) as number;
+  const pageSize = database.pragma('page_size', { simple: true }) as number;
+  const dbSizeBytes = pageCount * pageSize;
+  
+  return {
+    pageCount,
+    pageSize,
+    cacheSize: database.pragma('cache_size', { simple: true }) as number,
+    freelistCount: database.pragma('freelist_count', { simple: true }) as number,
+    walMode: database.pragma('journal_mode', { simple: true }) as string,
+    dbSizeBytes,
+    dbSizeMB: (dbSizeBytes / (1024 * 1024)).toFixed(2),
+  };
+}
+
+/**
+ * Run WAL checkpoint to consolidate WAL file
+ * Should be run periodically (e.g., daily via cron)
+ */
+export function checkpointDatabase(): { success: boolean; walPages: number; checkpointedPages: number } {
+  const database = getDatabase();
+  try {
+    // TRUNCATE mode: checkpoint and truncate WAL file
+    const result = database.pragma('wal_checkpoint(TRUNCATE)') as { busy: number; log: number; checkpointed: number }[];
+    const checkpoint = result[0];
+    console.log('[DB] WAL checkpoint completed:', checkpoint);
+    return { 
+      success: true, 
+      walPages: checkpoint.log,
+      checkpointedPages: checkpoint.checkpointed 
+    };
+  } catch (error) {
+    console.error('[DB] WAL checkpoint failed:', error);
+    return { success: false, walPages: 0, checkpointedPages: 0 };
+  }
+}
+
+/**
+ * Run incremental vacuum to reclaim space
+ * Should be run periodically (e.g., weekly)
+ */
+export function incrementalVacuum(pages: number = 100): boolean {
+  const database = getDatabase();
+  try {
+    database.pragma(`incremental_vacuum(${pages})`);
+    console.log(`[DB] Incremental vacuum completed: ${pages} pages`);
+    return true;
+  } catch (error) {
+    console.error('[DB] Incremental vacuum failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Optimize database (run ANALYZE for query planner)
+ * Should be run after significant data changes
+ */
+export function optimizeDatabase(): boolean {
+  const database = getDatabase();
+  try {
+    database.pragma('optimize');
+    database.exec('ANALYZE');
+    console.log('[DB] Database optimized');
+    return true;
+  } catch (error) {
+    console.error('[DB] Database optimization failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Setup graceful shutdown handlers
+ * Ensures database is properly closed on process termination
+ */
+export function setupGracefulShutdown(): void {
+  const shutdown = (signal: string) => {
+    console.log(`[DB] Received ${signal}, closing database connection...`);
+    closeDatabase();
+    process.exit(0);
+  };
+  
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 // Export database types for use in queries

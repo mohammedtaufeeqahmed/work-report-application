@@ -7,31 +7,101 @@ export interface QueueItem {
   data: CreateWorkReportInput;
   timestamp: number;
   retries: number;
+  dbRetries: number; // Database lock retry counter
   status: 'pending' | 'processing' | 'completed' | 'failed';
   error?: string;
   result?: WorkReport;
+  processingStartTime?: number;
+  processingEndTime?: number;
 }
 
-// Queue status
+// Queue status with detailed metrics
 export interface QueueStatus {
   pending: number;
   processing: number;
   completed: number;
   failed: number;
   total: number;
+  avgProcessingTimeMs: number;
+  queueHealthy: boolean;
+}
+
+// Configuration for the queue
+const QUEUE_CONFIG = {
+  // Delay between processing items (reduced for better throughput)
+  PROCESS_DELAY_MS: 10, // Was 100ms, now 10ms for 10x faster processing
+  
+  // Max retries for general errors
+  MAX_RETRIES: 3,
+  
+  // Max retries for database lock errors (SQLITE_BUSY)
+  MAX_DB_LOCK_RETRIES: 5,
+  
+  // Base delay for database lock retry (exponential backoff)
+  DB_LOCK_RETRY_BASE_MS: 50,
+  
+  // Max items to keep in history (to prevent memory leak)
+  MAX_HISTORY_ITEMS: 1000,
+  
+  // Max listeners for concurrent access
+  MAX_LISTENERS: 200,
+};
+
+/**
+ * Helper function to execute database operation with retry logic for locks
+ * Uses exponential backoff for SQLITE_BUSY errors
+ */
+async function executeWithRetry<T>(
+  operation: () => T,
+  maxRetries: number = QUEUE_CONFIG.MAX_DB_LOCK_RETRIES,
+  baseDelayMs: number = QUEUE_CONFIG.DB_LOCK_RETRY_BASE_MS
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return operation();
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if it's a database lock error
+      const errorCode = (error as { code?: string })?.code;
+      const errorMessage = lastError.message.toLowerCase();
+      const isLockError = 
+        errorCode === 'SQLITE_BUSY' || 
+        errorCode === 'SQLITE_LOCKED' ||
+        errorMessage.includes('database is locked') ||
+        errorMessage.includes('database is busy');
+      
+      if (isLockError && attempt < maxRetries - 1) {
+        // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.log(`[Queue] Database lock detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // For non-lock errors or max retries reached, throw immediately
+      throw lastError;
+    }
+  }
+  
+  throw lastError || new Error('Max retries reached');
 }
 
 // Simple in-memory queue using EventEmitter
+// Optimized for 40-50 concurrent users
 class WorkReportQueue extends EventEmitter {
   private queue: QueueItem[] = [];
   private processing: boolean = false;
-  private maxRetries: number = 3;
   private completedItems: QueueItem[] = [];
   private failedItems: QueueItem[] = [];
+  private processingTimes: number[] = [];
 
   constructor() {
     super();
-    this.setMaxListeners(100);
+    this.setMaxListeners(QUEUE_CONFIG.MAX_LISTENERS);
+    console.log('[Queue] WorkReportQueue initialized with optimized settings for concurrent access');
   }
 
   // Generate unique ID
@@ -47,6 +117,7 @@ class WorkReportQueue extends EventEmitter {
       data,
       timestamp: Date.now(),
       retries: 0,
+      dbRetries: 0,
       status: 'pending',
     };
 
@@ -70,34 +141,53 @@ class WorkReportQueue extends EventEmitter {
     
     const item = this.queue.find(i => i.status === 'pending');
     if (!item) {
-      console.log('[Queue] No pending items to process');
+      // No pending items
       return;
     }
 
     this.processing = true;
     item.status = 'processing';
-    console.log(`[Queue] Processing item ${item.id}`);
+    item.processingStartTime = Date.now();
+    console.log(`[Queue] Processing item ${item.id} (queue size: ${this.queue.length})`);
 
     try {
       // Import dynamically to avoid circular dependencies
       const { createWorkReport, getWorkReportByEmployeeAndDate } = await import('@/lib/db/queries');
       
-      // Check for duplicate
-      const existing = getWorkReportByEmployeeAndDate(item.data.employeeId, item.data.date);
+      // Check for duplicate with retry logic for database locks
+      const existing = await executeWithRetry(() => 
+        getWorkReportByEmployeeAndDate(item.data.employeeId, item.data.date)
+      );
+      
       if (existing) {
         throw new Error('A work report already exists for this employee on this date');
       }
 
-      // Create work report in database
-      const result = createWorkReport(item.data);
+      // Create work report in database with retry logic for database locks
+      const result = await executeWithRetry(() => createWorkReport(item.data));
+      
       item.result = result;
       item.status = 'completed';
+      item.processingEndTime = Date.now();
       
-      console.log(`[Queue] Item ${item.id} completed successfully`);
+      // Track processing time
+      const processingTime = item.processingEndTime - (item.processingStartTime || item.timestamp);
+      this.processingTimes.push(processingTime);
+      // Keep only last 100 times for average calculation
+      if (this.processingTimes.length > 100) {
+        this.processingTimes.shift();
+      }
+      
+      console.log(`[Queue] Item ${item.id} completed in ${processingTime}ms`);
       
       // Move to completed list
       this.queue = this.queue.filter(i => i.id !== item.id);
       this.completedItems.push(item);
+      
+      // Limit history size to prevent memory leak
+      if (this.completedItems.length > QUEUE_CONFIG.MAX_HISTORY_ITEMS) {
+        this.completedItems = this.completedItems.slice(-QUEUE_CONFIG.MAX_HISTORY_ITEMS);
+      }
       
       // Emit completion event
       this.emit('completed', item);
@@ -110,8 +200,12 @@ class WorkReportQueue extends EventEmitter {
     } catch (error) {
       item.retries++;
       item.error = error instanceof Error ? error.message : 'Unknown error';
+      item.processingEndTime = Date.now();
       
-      if (item.retries >= this.maxRetries) {
+      // Check if it's a duplicate error (don't retry)
+      const isDuplicateError = item.error.includes('already exists');
+      
+      if (isDuplicateError || item.retries >= QUEUE_CONFIG.MAX_RETRIES) {
         item.status = 'failed';
         console.error(`[Queue] Item ${item.id} failed after ${item.retries} retries:`, item.error);
         
@@ -119,11 +213,16 @@ class WorkReportQueue extends EventEmitter {
         this.queue = this.queue.filter(i => i.id !== item.id);
         this.failedItems.push(item);
         
+        // Limit history size
+        if (this.failedItems.length > QUEUE_CONFIG.MAX_HISTORY_ITEMS) {
+          this.failedItems = this.failedItems.slice(-QUEUE_CONFIG.MAX_HISTORY_ITEMS);
+        }
+        
         // Emit failure event
         this.emit('failed', item);
       } else {
         item.status = 'pending';
-        console.log(`[Queue] Item ${item.id} will be retried (attempt ${item.retries}/${this.maxRetries})`);
+        console.log(`[Queue] Item ${item.id} will be retried (attempt ${item.retries}/${QUEUE_CONFIG.MAX_RETRIES})`);
       }
     } finally {
       this.processing = false;
@@ -131,8 +230,8 @@ class WorkReportQueue extends EventEmitter {
       // Process next item if any
       const pendingCount = this.queue.filter(i => i.status === 'pending').length;
       if (pendingCount > 0) {
-        // Small delay between processing items
-        setTimeout(() => this.processNext(), 100);
+        // Reduced delay for faster throughput (10ms instead of 100ms)
+        setTimeout(() => this.processNext(), QUEUE_CONFIG.PROCESS_DELAY_MS);
       }
     }
   }
@@ -149,14 +248,24 @@ class WorkReportQueue extends EventEmitter {
     }
   }
 
-  // Get queue status
+  // Get queue status with metrics
   getStatus(): QueueStatus {
+    const avgProcessingTimeMs = this.processingTimes.length > 0
+      ? Math.round(this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length)
+      : 0;
+    
+    const pending = this.queue.filter(i => i.status === 'pending').length;
+    const processing = this.queue.filter(i => i.status === 'processing').length;
+    
     return {
-      pending: this.queue.filter(i => i.status === 'pending').length,
-      processing: this.queue.filter(i => i.status === 'processing').length,
+      pending,
+      processing,
       completed: this.completedItems.length,
       failed: this.failedItems.length,
       total: this.queue.length + this.completedItems.length + this.failedItems.length,
+      avgProcessingTimeMs,
+      // Queue is healthy if not backing up significantly
+      queueHealthy: pending < 50,
     };
   }
 
@@ -171,13 +280,26 @@ class WorkReportQueue extends EventEmitter {
 
   // Clear completed and failed items (for cleanup)
   clearHistory(): void {
+    const clearedCount = this.completedItems.length + this.failedItems.length;
     this.completedItems = [];
     this.failedItems = [];
+    this.processingTimes = [];
+    console.log(`[Queue] Cleared ${clearedCount} items from history`);
   }
 
   // Get all items (for debugging)
   getAllItems(): QueueItem[] {
     return [...this.queue, ...this.completedItems, ...this.failedItems];
+  }
+  
+  // Get recent failed items (for monitoring)
+  getRecentFailures(limit: number = 10): QueueItem[] {
+    return this.failedItems.slice(-limit);
+  }
+  
+  // Get queue configuration (for monitoring)
+  getConfig(): typeof QUEUE_CONFIG {
+    return { ...QUEUE_CONFIG };
   }
 }
 
@@ -209,3 +331,14 @@ export function getQueueItemStatus(id: string): QueueItem | undefined {
   return queue.getItem(id);
 }
 
+// Helper function to clear queue history
+export function clearQueueHistory(): void {
+  const queue = getWorkReportQueue();
+  queue.clearHistory();
+}
+
+// Helper function to get recent failures
+export function getRecentQueueFailures(limit: number = 10): QueueItem[] {
+  const queue = getWorkReportQueue();
+  return queue.getRecentFailures(limit);
+}
