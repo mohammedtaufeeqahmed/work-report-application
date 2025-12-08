@@ -42,7 +42,7 @@ export default function EmployeeDashboardPage() {
   // Expanded report state
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
 
-  // Check if employee can edit their own reports
+  // Check if user can edit their own reports (applies to both employees and managers)
   const canEditOwnReports = editPermissions?.employee_can_edit_own_reports || false;
 
   // Fetch session and permissions on mount

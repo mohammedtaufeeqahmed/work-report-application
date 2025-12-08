@@ -61,8 +61,12 @@ export default function EmployeeReportsPage() {
     if (session.role === 'admin') {
       return editPermissions.admin_can_edit_reports;
     }
-    // Managers cannot edit reports - removed
+    // Employees can edit their own reports if permission is enabled
     if (session.role === 'employee' && isOwnReport) {
+      return editPermissions.employee_can_edit_own_reports;
+    }
+    // Managers can also edit their own reports when employee_can_edit_own_reports is enabled
+    if (session.role === 'manager' && isOwnReport) {
       return editPermissions.employee_can_edit_own_reports;
     }
     return false;

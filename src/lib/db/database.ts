@@ -115,6 +115,26 @@ function ensureTablesExist(database: Database.Database): void {
     console.log('[DB] Created manager_departments table');
   }
 
+  // Check and create otpTokens table for email OTP verification
+  const otpTableExists = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='otpTokens'").get();
+  if (!otpTableExists) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS otpTokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employeeId TEXT NOT NULL,
+        otp TEXT NOT NULL,
+        expiresAt DATETIME NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_otpTokens_employeeId ON otpTokens(employeeId);
+      CREATE INDEX IF NOT EXISTS idx_otpTokens_otp ON otpTokens(otp);
+      CREATE INDEX IF NOT EXISTS idx_otpTokens_expiresAt ON otpTokens(expiresAt);
+    `);
+    console.log('[DB] Created otpTokens table');
+  }
+
   // Clean up any leftover migration tables first
   database.exec(`DROP TABLE IF EXISTS employees_new`);
   

@@ -114,8 +114,10 @@ export async function PUT(
     } else if (session.role === 'employee') {
       // Employees can only edit their own reports if permission is enabled
       canEdit = isOwnReport && permissions.employee_can_edit_own_reports;
+    } else if (session.role === 'manager') {
+      // Managers can edit their own reports when employee_can_edit_own_reports is enabled
+      canEdit = isOwnReport && permissions.employee_can_edit_own_reports;
     }
-    // Managers cannot edit reports - removed
 
     if (!canEdit) {
       return NextResponse.json<ApiResponse>(

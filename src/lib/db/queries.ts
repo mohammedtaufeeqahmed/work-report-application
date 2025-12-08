@@ -33,10 +33,12 @@ export function getEmployeeById(id: number): Employee | null {
 
 /**
  * Get employee by employeeId (the human-readable ID)
+ * Case-insensitive lookup - accepts both uppercase and lowercase
  */
 export function getEmployeeByEmployeeId(employeeId: string): Employee | null {
   const db = getDatabase();
-  const result = db.prepare('SELECT * FROM employees WHERE employeeId = ?').get(employeeId);
+  // Use UPPER() for case-insensitive comparison
+  const result = db.prepare('SELECT * FROM employees WHERE UPPER(employeeId) = UPPER(?)').get(employeeId);
   return result as Employee | null;
 }
 
@@ -819,6 +821,107 @@ export function updateEditPermissions(permissions: Partial<EditPermissions>): Ed
   }
   
   return getEditPermissions();
+}
+
+// ============================================================================
+// OTP Token Queries (for password change verification)
+// ============================================================================
+
+export interface OTPToken {
+  id: number;
+  employeeId: string;
+  otp: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/**
+ * Create an OTP token for email verification
+ */
+export function createOTPToken(employeeId: string, otp: string, expiresAt: Date): OTPToken {
+  const db = getDatabase();
+  const result = db.prepare(`
+    INSERT INTO otpTokens (employeeId, otp, expiresAt)
+    VALUES (?, ?, ?)
+  `).run(employeeId, otp, expiresAt.toISOString());
+  
+  return {
+    id: result.lastInsertRowid as number,
+    employeeId,
+    otp,
+    expiresAt: expiresAt.toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Get a valid OTP token
+ */
+export function getOTPToken(employeeId: string, otp: string): OTPToken | null {
+  const db = getDatabase();
+  const result = db.prepare(`
+    SELECT * FROM otpTokens 
+    WHERE employeeId = ? AND otp = ?
+  `).get(employeeId, otp);
+  return result as OTPToken | null;
+}
+
+/**
+ * Delete all OTP tokens for an employee
+ */
+export function deleteOTPTokensForEmployee(employeeId: string): void {
+  const db = getDatabase();
+  db.prepare('DELETE FROM otpTokens WHERE employeeId = ?').run(employeeId);
+}
+
+/**
+ * Clean up expired OTP tokens
+ */
+export function cleanupExpiredOTPTokens(): number {
+  const db = getDatabase();
+  const result = db.prepare('DELETE FROM otpTokens WHERE expiresAt < datetime("now")').run();
+  return result.changes;
+}
+
+// ============================================================================
+// Manager Hierarchy Queries
+// ============================================================================
+
+interface ManagerInfo {
+  id: number;
+  employeeId: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * Get managers for a specific department
+ */
+export function getManagersForDepartment(departmentName: string): ManagerInfo[] {
+  const db = getDatabase();
+  
+  // First, get the department ID
+  const dept = db.prepare('SELECT id FROM departments WHERE name = ?').get(departmentName) as { id: number } | undefined;
+  
+  if (!dept) {
+    // If department doesn't exist in departments table, check if any manager has this department directly
+    const directManagers = db.prepare(`
+      SELECT id, employeeId, name, email 
+      FROM employees 
+      WHERE role = 'manager' AND department = ? AND status = 'active'
+    `).all(departmentName) as ManagerInfo[];
+    return directManagers;
+  }
+  
+  // Get managers linked to this department via manager_departments
+  const managers = db.prepare(`
+    SELECT e.id, e.employeeId, e.name, e.email
+    FROM employees e
+    INNER JOIN manager_departments md ON e.id = md.managerId
+    WHERE md.departmentId = ? AND e.role = 'manager' AND e.status = 'active'
+  `).all(dept.id) as ManagerInfo[];
+  
+  return managers;
 }
 
 // Export transaction helper for complex operations

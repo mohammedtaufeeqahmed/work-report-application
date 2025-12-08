@@ -235,6 +235,13 @@ export function Navbar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem 
                   onClick={handleLogout} 
                   className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -351,11 +358,24 @@ export function Navbar() {
                   )}
                 </nav>
 
-                <div className="p-4 border-t">
+                <div className="p-4 border-t space-y-2">
+                  {user && (
+                    <Button 
+                      asChild
+                      variant="outline" 
+                      className="w-full active-press"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Link href="/profile">
+                        <User className="mr-2 h-4 w-4" />
+                        Profile
+                      </Link>
+                    </Button>
+                  )}
                   {user ? (
                     <Button 
                       variant="outline" 
-                      className="w-full active-press"
+                      className="w-full active-press text-destructive hover:text-destructive"
                       onClick={() => {
                         handleLogout();
                         setMobileMenuOpen(false);

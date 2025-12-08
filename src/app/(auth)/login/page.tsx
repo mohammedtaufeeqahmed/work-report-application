@@ -1,17 +1,34 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import type { SessionUser } from '@/types';
+
+// Get dashboard URL based on user role
+function getDashboardUrl(role: SessionUser['role']): string {
+  switch (role) {
+    case 'superadmin':
+      return '/super-admin';
+    case 'admin':
+      return '/admin';
+    case 'boardmember':
+      return '/management-dashboard';
+    case 'manager':
+    case 'employee':
+    default:
+      return '/employee-dashboard';
+  }
+}
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = searchParams.get('callbackUrl');
   const errorParam = searchParams.get('error');
 
   const [employeeId, setEmployeeId] = useState('');
@@ -20,6 +37,29 @@ function LoginForm() {
   const [error, setError] = useState(errorParam || '');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          // User is already logged in, redirect to dashboard
+          const dashboardUrl = getDashboardUrl(data.data.role);
+          router.replace(callbackUrl || dashboardUrl);
+          return;
+        }
+      } catch {
+        // Not logged in, show login form
+      }
+      setCheckingAuth(false);
+    };
+    
+    checkAuth();
+  }, [router, callbackUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +75,10 @@ function LoginForm() {
 
       const data = await response.json();
 
-      if (data.success) {
-        router.push(callbackUrl);
+      if (data.success && data.data) {
+        // Redirect to callback URL if provided, otherwise to role-based dashboard
+        const redirectUrl = callbackUrl || getDashboardUrl(data.data.role);
+        router.push(redirectUrl);
         router.refresh();
       } else {
         setError(data.error || 'Login failed');
@@ -47,6 +89,15 @@ function LoginForm() {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="w-full max-w-sm flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-sm animate-fade-in-up">

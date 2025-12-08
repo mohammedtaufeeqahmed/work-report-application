@@ -134,6 +134,17 @@ export function initializeSchema(): void {
     )
   `);
 
+  // Create OTP tokens table for email verification (password change)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS otpTokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employeeId TEXT NOT NULL,
+      otp TEXT NOT NULL,
+      expiresAt DATETIME NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Insert default settings for work report edit permissions
   db.exec(`
     INSERT OR IGNORE INTO settings (key, value) VALUES 
@@ -229,6 +240,13 @@ export function initializeSchema(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_departments_entityId ON departments(entityId);
     CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
+  `);
+
+  // OTP token indexes
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_otpTokens_employeeId ON otpTokens(employeeId);
+    CREATE INDEX IF NOT EXISTS idx_otpTokens_otp ON otpTokens(otp);
+    CREATE INDEX IF NOT EXISTS idx_otpTokens_expiresAt ON otpTokens(expiresAt);
   `);
 
   console.log('[DB] Database schema initialized with optimized indexes');

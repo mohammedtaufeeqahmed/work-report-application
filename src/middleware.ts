@@ -10,6 +10,7 @@ const protectedRoutes = [
   '/managers-dashboard',
   '/employee-reports',
   '/employee-dashboard',
+  '/profile',
 ];
 
 // Routes that require admin role

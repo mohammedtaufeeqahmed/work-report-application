@@ -1,17 +1,65 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, FileText, Users, BarChart3, Shield, Clock, CheckCircle, Sparkles, Zap, ArrowUpRight } from 'lucide-react';
+import { ArrowRight, FileText, Users, BarChart3, Shield, Clock, CheckCircle, Sparkles, Zap, ArrowUpRight, Loader2 } from 'lucide-react';
 import { getISTYear } from '@/lib/date';
+import type { SessionUser } from '@/types';
+
+// Get dashboard URL based on user role
+function getDashboardUrl(role: SessionUser['role']): string {
+  switch (role) {
+    case 'superadmin':
+      return '/super-admin';
+    case 'admin':
+      return '/admin';
+    case 'boardmember':
+      return '/management-dashboard';
+    case 'manager':
+    case 'employee':
+    default:
+      return '/employee-dashboard';
+  }
+}
 
 export default function Home() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    // Check if user is logged in and redirect to dashboard
+    const checkAuthAndRedirect = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          // User is logged in, redirect to their dashboard
+          const dashboardUrl = getDashboardUrl(data.data.role);
+          router.replace(dashboardUrl);
+          return;
+        }
+      } catch {
+        // Not logged in, show homepage
+      }
+      setCheckingAuth(false);
+      setMounted(true);
+    };
+    
+    checkAuthAndRedirect();
+  }, [router]);
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const features = [
     {
