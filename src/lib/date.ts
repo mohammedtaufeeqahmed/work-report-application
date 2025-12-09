@@ -115,3 +115,29 @@ export function getDayOfMonthIST(dateStr: string): number {
 export function getISTYear(): number {
   return getISTNow().getFullYear();
 }
+
+/**
+ * Converts a UTC datetime string (from database) to IST date string (YYYY-MM-DD).
+ * Handles formats like "YYYY-MM-DD HH:MM:SS" (SQLite) or ISO strings.
+ */
+export function convertUTCToISTDate(utcDatetime: string): string {
+  // Parse the UTC datetime
+  let date: Date;
+  
+  if (utcDatetime.includes('T')) {
+    // ISO format
+    date = new Date(utcDatetime);
+  } else if (utcDatetime.includes(' ')) {
+    // SQLite format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
+    date = new Date(utcDatetime.replace(' ', 'T') + 'Z');
+  } else {
+    // Just date: "YYYY-MM-DD"
+    return utcDatetime;
+  }
+  
+  // Convert to IST by adding 5:30 hours
+  const istMillis = date.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
+  const istDate = new Date(istMillis);
+  
+  return formatDateToIST(istDate);
+}

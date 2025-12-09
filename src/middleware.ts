@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import type { PageAccess, UserRole } from '@/types';
 
 // Routes that require authentication
 const protectedRoutes = [
@@ -10,17 +11,64 @@ const protectedRoutes = [
   '/managers-dashboard',
   '/employee-reports',
   '/employee-dashboard',
+  // '/work-report' - removed from protected routes to allow unauthenticated access
   '/profile',
 ];
 
-// Routes that require admin role
-const adminRoutes = ['/admin'];
+// Default page access by role (duplicated here since middleware can't import from @/types at edge runtime)
+const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
+  employee: {
+    dashboard: true,
+    submit_report: true,
+    employee_reports: false,
+    management_dashboard: false,
+    admin_dashboard: false,
+    super_admin_dashboard: false,
+  },
+  manager: {
+    dashboard: true,
+    submit_report: true,
+    employee_reports: true,
+    management_dashboard: true,
+    admin_dashboard: false,
+    super_admin_dashboard: false,
+  },
+  boardmember: {
+    dashboard: true,
+    submit_report: false,
+    employee_reports: true,
+    management_dashboard: true,
+    admin_dashboard: false,
+    super_admin_dashboard: false,
+  },
+  admin: {
+    dashboard: true,
+    submit_report: true,
+    employee_reports: false,
+    management_dashboard: false,
+    admin_dashboard: true,
+    super_admin_dashboard: false,
+  },
+  superadmin: {
+    dashboard: true,
+    submit_report: true,
+    employee_reports: true,
+    management_dashboard: true,
+    admin_dashboard: true,
+    super_admin_dashboard: true,
+  },
+};
 
-// Routes that require superadmin role
-const superAdminRoutes = ['/super-admin'];
-
-// Routes accessible by board members
-const boardMemberRoutes = ['/management-dashboard'];
+// Map routes to page access keys
+const ROUTE_TO_PAGE_ACCESS: Record<string, keyof PageAccess> = {
+  '/employee-dashboard': 'dashboard',
+  '/work-report': 'submit_report',
+  '/employee-reports': 'employee_reports',
+  '/management-dashboard': 'management_dashboard',
+  '/managers-dashboard': 'management_dashboard', // Uses same permission as management dashboard
+  '/admin': 'admin_dashboard',
+  '/super-admin': 'super_admin_dashboard',
+};
 
 // Get JWT secret
 function getJwtSecret(): Uint8Array {
@@ -28,14 +76,34 @@ function getJwtSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
+// Get user's page access (from JWT or default based on role)
+function getUserPageAccess(payload: { pageAccess?: PageAccess | null; role: UserRole }): PageAccess {
+  if (payload.pageAccess) {
+    return payload.pageAccess;
+  }
+  return DEFAULT_PAGE_ACCESS[payload.role] || DEFAULT_PAGE_ACCESS.employee;
+}
+
+// Check if user has access to a specific route
+function hasRouteAccess(pathname: string, pageAccess: PageAccess): boolean {
+  // Find matching route
+  for (const [route, accessKey] of Object.entries(ROUTE_TO_PAGE_ACCESS)) {
+    if (pathname.startsWith(route)) {
+      return pageAccess[accessKey] === true;
+    }
+  }
+  // Profile is always accessible for authenticated users
+  if (pathname.startsWith('/profile')) {
+    return true;
+  }
+  return true; // Default to allowing access for unmapped routes
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if this is a protected route
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route));
-  const isSuperAdminRoute = superAdminRoutes.some(route => pathname.startsWith(route));
-  const isBoardMemberRoute = boardMemberRoutes.some(route => pathname.startsWith(route));
 
   // If not a protected route, allow access
   if (!isProtectedRoute) {
@@ -64,23 +132,16 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Check admin routes
-    if (isAdminRoute && payload.role !== 'admin' && payload.role !== 'superadmin') {
-      return NextResponse.redirect(new URL('/', request.url));
-    }
+    const role = payload.role as UserRole;
+    const pageAccess = getUserPageAccess({ 
+      pageAccess: payload.pageAccess as PageAccess | null | undefined, 
+      role 
+    });
 
-    // Check superadmin routes
-    if (isSuperAdminRoute && payload.role !== 'superadmin') {
+    // Check page access permissions
+    if (!hasRouteAccess(pathname, pageAccess)) {
+      // Redirect to home page if user doesn't have access
       return NextResponse.redirect(new URL('/', request.url));
-    }
-
-    // Board members can only access board member routes
-    if (payload.role === 'boardmember') {
-      if (isBoardMemberRoute) {
-        return NextResponse.next();
-      }
-      // Redirect board members to management dashboard if they try to access other protected routes
-      return NextResponse.redirect(new URL('/management-dashboard', request.url));
     }
 
     // Allow access

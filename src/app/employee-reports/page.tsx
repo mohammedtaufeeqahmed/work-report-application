@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Search, FileText, Briefcase, Coffee, ArrowRight, Lock, Pencil, X, Check, ChevronDown, Filter, Users, Calendar, AlertCircle, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions } from '@/types';
-import { getISTTodayRange, getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay } from '@/lib/date';
+import { getISTTodayRange, getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, convertUTCToISTDate } from '@/lib/date';
 
 export default function EmployeeReportsPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
@@ -49,27 +49,35 @@ export default function EmployeeReportsPage() {
     }
   }, [sessionLoading, session]);
   
-  // Check if user can edit reports based on role and permissions
+  // Check if user can edit reports based on role, permissions, and creation date
   const canEdit = (report: WorkReport) => {
     if (!session || !editPermissions) return false;
     
     const isOwnReport = report.employeeId === session.employeeId;
     
+    // First check role-based permissions
+    let hasPermission = false;
+    
     if (session.role === 'superadmin') {
-      return editPermissions.superadmin_can_edit_reports;
+      hasPermission = editPermissions.superadmin_can_edit_reports;
+    } else if (session.role === 'admin') {
+      hasPermission = editPermissions.admin_can_edit_reports;
+    } else if (session.role === 'employee' && isOwnReport) {
+      // Employees can edit their own reports if permission is enabled
+      hasPermission = editPermissions.employee_can_edit_own_reports;
+    } else if (session.role === 'manager' && isOwnReport) {
+      // Managers can also edit their own reports when employee_can_edit_own_reports is enabled
+      hasPermission = editPermissions.employee_can_edit_own_reports;
     }
-    if (session.role === 'admin') {
-      return editPermissions.admin_can_edit_reports;
-    }
-    // Employees can edit their own reports if permission is enabled
-    if (session.role === 'employee' && isOwnReport) {
-      return editPermissions.employee_can_edit_own_reports;
-    }
-    // Managers can also edit their own reports when employee_can_edit_own_reports is enabled
-    if (session.role === 'manager' && isOwnReport) {
-      return editPermissions.employee_can_edit_own_reports;
-    }
-    return false;
+    
+    if (!hasPermission) return false;
+    
+    // Check if the report was created today (edit only allowed on creation day)
+    // Convert UTC createdAt to IST date and compare with today in IST
+    const createdDate = convertUTCToISTDate(report.createdAt);
+    const todayDate = getISTTodayDateString();
+    
+    return createdDate === todayDate;
   };
 
   // Fetch session and permissions on mount

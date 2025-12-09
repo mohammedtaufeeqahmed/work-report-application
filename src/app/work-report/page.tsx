@@ -8,7 +8,7 @@ export default function WorkReportPage() {
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold mb-2">Submit Work Report</h1>
             <p className="text-muted-foreground">
-              Enter your employee ID and submit your daily work report
+              Submit your daily work report
             </p>
           </div>
           <WorkReportForm />

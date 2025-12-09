@@ -107,6 +107,7 @@ export interface SessionUser {
   status: UserStatus;
   entityId: number | null;
   branchId: number | null;
+  pageAccess: PageAccess | null;
 }
 
 // Login credentials

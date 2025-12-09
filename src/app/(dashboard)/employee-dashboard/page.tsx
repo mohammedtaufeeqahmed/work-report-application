@@ -24,7 +24,7 @@ import {
 import { toast } from 'sonner';
 import Link from 'next/link';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions } from '@/types';
-import { getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, getDayOfMonthIST } from '@/lib/date';
+import { getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, getDayOfMonthIST, convertUTCToISTDate } from '@/lib/date';
 
 export default function EmployeeDashboardPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
@@ -44,6 +44,17 @@ export default function EmployeeDashboardPage() {
 
   // Check if user can edit their own reports (applies to both employees and managers)
   const canEditOwnReports = editPermissions?.employee_can_edit_own_reports || false;
+
+  // Check if a report can be edited (only on the same day it was created)
+  const canEditReport = (report: WorkReport) => {
+    if (!canEditOwnReports) return false;
+    
+    // Convert UTC createdAt to IST date and compare with today in IST
+    const createdDate = convertUTCToISTDate(report.createdAt);
+    const todayDate = getISTTodayDateString();
+    
+    return createdDate === todayDate;
+  };
 
   // Fetch session and permissions on mount
   useEffect(() => {
@@ -326,7 +337,7 @@ export default function EmployeeDashboardPage() {
           <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
             <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
               <Pencil className="h-4 w-4" />
-              <span className="text-sm font-medium">You can edit your work reports</span>
+              <span className="text-sm font-medium">You can edit your work reports (only on the day they were created)</span>
             </div>
           </div>
         )}
@@ -421,7 +432,7 @@ export default function EmployeeDashboardPage() {
 
                       {/* Expand/Edit Icons */}
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        {canEditOwnReports && (
+                        {canEditReport(report) && (
                           <Button
                             size="sm"
                             variant="ghost"

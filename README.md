@@ -301,6 +301,8 @@ graph TD
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/auth/login` | User login |
+| `GET` | `/api/auth/google` | Initiate Google OAuth login |
+| `GET` | `/api/auth/google/callback` | Google OAuth callback handler |
 | `POST` | `/api/auth/logout` | User logout |
 | `GET` | `/api/auth/session` | Get current session |
 | `POST` | `/api/auth/reset-password` | Reset password |
@@ -492,6 +494,12 @@ DATABASE_PATH=./data/workreport.db
 # Authentication (generate secure secrets!)
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
 NEXTAUTH_SECRET=another-super-secret-key-min-32-chars
+
+# Google OAuth (Optional - for Google Workspace login)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_ALLOWED_DOMAINS=domain1.com,domain2.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
 
 # Google Sheets Backup (Optional)
 GOOGLE_SHEETS_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
@@ -717,6 +725,115 @@ pm2 restart work-report
 - [ ] PM2 startup script enabled
 - [ ] Domain DNS configured (if using custom domain)
 
+### 💾 Disk Space Requirements
+
+#### Application Size Breakdown
+
+| Component | Size |
+|-----------|------|
+| **Docker Engine** | ~400-500 MB |
+| **Node.js Alpine Image** (node:20-alpine) | ~180 MB |
+| **Build tools** (python3, make, g++) | ~200-300 MB |
+| **node_modules** (googleapis is large) | ~600-800 MB |
+| **Next.js build** (.next folder) | ~100-200 MB |
+| **nginx:alpine image** | ~40-50 MB |
+| **SQLite database** (data) | ~10-50 MB (grows with usage) |
+| **Docker build cache** | ~500 MB - 1 GB |
+| **Total for application** | **~2-3 GB** |
+
+#### Recommended EC2 Storage
+
+| Use Case | Storage |
+|----------|---------|
+| **Minimum** | 8-10 GB (tight) |
+| **Recommended** | 15-20 GB (comfortable) |
+| **With room to grow** | 30-40 GB |
+
+### 🧹 EC2 Disk Cleanup Commands
+
+> ⚠️ **Warning**: Some Docker cleanup commands can delete your application. Use the safe commands below.
+
+#### ✅ Safe Commands (No Impact on Application)
+
+```bash
+# Check disk usage
+df -h
+
+# Check what's using space
+du -sh /* 2>/dev/null | sort -h
+
+# Check Docker space usage
+docker system df
+
+# Clean system packages (Ubuntu)
+sudo apt autoremove -y
+sudo apt clean
+
+# Clean system packages (Amazon Linux)
+sudo yum clean all
+
+# Clean old system logs (keep last 7 days)
+sudo journalctl --vacuum-time=7d
+```
+
+#### ✅ Safe Docker Cleanup (Won't Break Running App)
+
+```bash
+# Remove only dangling images (unused build layers) - SAFE
+docker image prune -f
+
+# Remove only build cache - SAFE
+docker builder prune -f
+
+# Remove unused images BUT keep running containers' images
+# Make sure your app container is RUNNING first!
+docker image prune -a -f
+```
+
+#### ⚠️ Dangerous Commands (Use with Caution)
+
+```bash
+# ❌ This will DELETE your app image and may delete database volumes!
+docker system prune -a --volumes
+
+# Only use this if you want to completely reset Docker
+# You will need to rebuild your application after this
+```
+
+#### Why Your Disk Might Be Full
+
+If you're seeing high disk usage (70%+), common causes are:
+
+1. **Docker build cache** - Multiple builds leave cached layers
+2. **Old Docker images** - Previous builds not cleaned up
+3. **System updates** - EC2 AMI + package updates
+4. **Log files** - Application and system logs accumulating
+
+#### Recommended Cleanup Sequence
+
+```bash
+# 1. Check what's using space
+df -h
+du -sh /var/lib/docker/* 2>/dev/null | sort -h
+
+# 2. Clean Docker build cache only
+docker builder prune -f
+
+# 3. Clean dangling images only
+docker image prune -f
+
+# 4. Clean system packages
+sudo apt autoremove -y && sudo apt clean
+
+# 5. Clean old logs
+sudo journalctl --vacuum-time=7d
+
+# 6. Verify disk space recovered
+df -h
+```
+
+After cleanup, a properly configured EC2 should use **20-30%** of a 40GB disk, not 70%+.
+
 ---
 
 ## ⚙️ Configuration
@@ -733,6 +850,12 @@ DATABASE_PATH=./data/workreport.db
 JWT_SECRET=your-super-secret-jwt-key
 NEXTAUTH_SECRET=your-nextauth-secret
 
+# Google OAuth (Optional - for Google Workspace login)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_ALLOWED_DOMAINS=domain1.com,domain2.com
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
 # Google Sheets Backup (Optional)
 GOOGLE_SHEETS_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
 GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
@@ -745,6 +868,32 @@ EMAIL_FROM_ADDRESS=noreply@yourdomain.com
 # Environment
 NODE_ENV=development
 ```
+
+### Google OAuth Setup (Optional)
+
+To enable Google Workspace login:
+
+1. **Go to [Google Cloud Console](https://console.cloud.google.com/)**
+2. **Create a new project** or select an existing one
+3. **Enable APIs:**
+   - Go to "APIs & Services" → "Library"
+   - Enable "Google+ API" or "People API"
+4. **Create OAuth 2.0 Credentials:**
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "OAuth client ID"
+   - Application type: **Web application**
+   - Authorized redirect URIs: `{YOUR_APP_URL}/api/auth/google/callback`
+     - Example: `http://localhost:3000/api/auth/google/callback` (development)
+     - Example: `https://your-domain.com/api/auth/google/callback` (production)
+5. **Copy credentials** to your `.env.local`:
+   - Client ID → `GOOGLE_CLIENT_ID`
+   - Client Secret → `GOOGLE_CLIENT_SECRET`
+6. **Configure allowed domains:**
+   - Set `GOOGLE_ALLOWED_DOMAINS` to comma-separated list of workspace domains
+   - Example: `company.com,subsidiary.com`
+   - Users must have an account in your database (matched by email)
+
+**Note:** The same OAuth credentials work for multiple domains. Domain validation happens on the backend after authentication.
 
 ### Edit Permissions Configuration
 

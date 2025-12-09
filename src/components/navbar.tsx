@@ -16,7 +16,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Menu, LogOut, User, LayoutDashboard, FileText, BarChart3, ChevronDown, ArrowRight, Home } from 'lucide-react';
-import type { SessionUser } from '@/types';
+import type { SessionUser, PageAccess } from '@/types';
+import { DEFAULT_PAGE_ACCESS } from '@/types';
 
 export function Navbar() {
   const router = useRouter();
@@ -25,6 +26,19 @@ export function Navbar() {
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  // Get user's page access permissions
+  const getPageAccess = (): PageAccess => {
+    if (user?.pageAccess) {
+      return user.pageAccess;
+    }
+    if (user?.role) {
+      return DEFAULT_PAGE_ACCESS[user.role];
+    }
+    return DEFAULT_PAGE_ACCESS.employee;
+  };
+
+  const pageAccess = user ? getPageAccess() : null;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,25 +91,30 @@ export function Navbar() {
   // Board members only see Management Dashboard - no other nav links
   const isBoardMember = user?.role === 'boardmember';
 
+  // Build nav links based on pageAccess permissions
   const navLinks = [
-    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true },
-    { href: '/work-report', label: 'Submit Report', icon: FileText },
-  ];
+    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' as keyof PageAccess },
+    { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' as keyof PageAccess },
+  ].filter(link => {
+    if (!user) return !link.requireAuth;
+    return pageAccess?.[link.accessKey] === true;
+  });
 
-  // View Reports link - only for managers/admins (employees use their dashboard)
+  // View Reports link - based on pageAccess
   const viewReportsLabel = user?.role === 'manager' ? 'Team Reports' : 'Employee Reports';
   const viewReportsLink = { href: '/employee-reports', label: viewReportsLabel, icon: BarChart3 };
-  const showViewReports = user && (user.role === 'manager' || user.role === 'admin' || user.role === 'superadmin');
+  const showViewReports = user && pageAccess?.employee_reports === true;
 
+  // Admin links - based on pageAccess
   const adminLinks = [
-    { href: '/management-dashboard', label: 'Management', icon: BarChart3, roles: ['admin', 'superadmin', 'boardmember'] },
-    { href: '/managers-dashboard', label: 'Managers', icon: BarChart3, roles: ['admin', 'superadmin'] },
-    { href: '/admin', label: 'Admin Panel', icon: LayoutDashboard, roles: ['admin', 'superadmin'] },
-    { href: '/super-admin', label: 'Super Admin', icon: LayoutDashboard, roles: ['superadmin'] },
+    { href: '/management-dashboard', label: 'Management Dashboard', icon: BarChart3, accessKey: 'management_dashboard' as keyof PageAccess },
+    { href: '/managers-dashboard', label: 'Managers Dashboard', icon: BarChart3, accessKey: 'management_dashboard' as keyof PageAccess },
+    { href: '/admin', label: 'Admin Dashboard', icon: LayoutDashboard, accessKey: 'admin_dashboard' as keyof PageAccess },
+    { href: '/super-admin', label: 'Super Admin Dashboard', icon: LayoutDashboard, accessKey: 'super_admin_dashboard' as keyof PageAccess },
   ];
 
   const filteredAdminLinks = adminLinks.filter(
-    (link) => user && link.roles.includes(user.role)
+    (link) => user && pageAccess?.[link.accessKey] === true
   );
 
   return (
@@ -118,9 +137,7 @@ export function Navbar() {
         {/* Desktop Navigation */}
         <div className="hidden md:flex md:items-center md:gap-1">
           {/* Board members don't see regular nav links */}
-          {!isBoardMember && navLinks
-            .filter((link) => !link.requireAuth || user)
-            .map((link) => {
+          {!isBoardMember && navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
@@ -293,9 +310,7 @@ export function Navbar() {
 
                 <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                   {/* Board members don't see regular nav links */}
-                  {!isBoardMember && navLinks
-                    .filter((link) => !link.requireAuth || user)
-                    .map((link) => {
+                  {!isBoardMember && navLinks.map((link) => {
                     const isActive = pathname === link.href;
                     return (
                       <Link

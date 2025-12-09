@@ -2,7 +2,8 @@ import bcrypt from 'bcrypt';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { getEmployeeByEmployeeId, updateEmployeePassword } from './db/queries';
-import type { Employee, SessionUser, LoginCredentials } from '@/types';
+import type { Employee, SessionUser, LoginCredentials, PageAccess } from '@/types';
+import { DEFAULT_PAGE_ACCESS } from '@/types';
 
 // Constants
 const SALT_ROUNDS = 10;
@@ -50,6 +51,7 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
     status: user.status,
     entityId: user.entityId,
     branchId: user.branchId,
+    pageAccess: user.pageAccess,
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -77,6 +79,7 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       status: payload.status as SessionUser['status'],
       entityId: payload.entityId as number | null,
       branchId: payload.branchId as number | null,
+      pageAccess: payload.pageAccess as PageAccess | null,
     };
   } catch {
     return null;
@@ -194,6 +197,18 @@ export async function changePassword(employeeId: string, newPassword: string): P
  * Convert Employee to SessionUser (removes sensitive data)
  */
 export function employeeToSessionUser(employee: Employee): SessionUser {
+  // Parse pageAccess from JSON string or use default based on role
+  let pageAccess: PageAccess | null = null;
+  if (employee.pageAccess) {
+    try {
+      pageAccess = JSON.parse(employee.pageAccess) as PageAccess;
+    } catch {
+      pageAccess = DEFAULT_PAGE_ACCESS[employee.role];
+    }
+  } else {
+    pageAccess = DEFAULT_PAGE_ACCESS[employee.role];
+  }
+
   return {
     id: employee.id,
     employeeId: employee.employeeId,
@@ -204,6 +219,7 @@ export function employeeToSessionUser(employee: Employee): SessionUser {
     status: employee.status,
     entityId: employee.entityId,
     branchId: employee.branchId,
+    pageAccess,
   };
 }
 

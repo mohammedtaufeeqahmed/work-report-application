@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWorkReportById, updateWorkReport, getEditPermissions, getManagerDepartments } from '@/lib/db/queries';
 import { getSession } from '@/lib/auth';
 import type { ApiResponse, WorkReport, UpdateWorkReportInput } from '@/types';
+import { getISTTodayDateString, convertUTCToISTDate } from '@/lib/date';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -122,6 +123,17 @@ export async function PUT(
     if (!canEdit) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'You do not have permission to edit this report' },
+        { status: 403 }
+      );
+    }
+
+    // Check if the report was created today (edit only allowed on the same day as creation)
+    const todayDate = getISTTodayDateString();
+    const reportCreatedDate = convertUTCToISTDate(report.createdAt);
+    
+    if (reportCreatedDate !== todayDate) {
+      return NextResponse.json<ApiResponse>(
+        { success: false, error: 'Reports can only be edited on the same day they were created' },
         { status: 403 }
       );
     }

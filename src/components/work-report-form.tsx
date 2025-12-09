@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, CheckCircle, AlertCircle, Search, Briefcase, Coffee, ArrowRight, Sparkles, Calendar, Info, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import type { EmployeeLookup, WorkStatus } from '@/types';
+import type { EmployeeLookup, WorkStatus, SessionUser } from '@/types';
 import { getISTTodayDateString, getFullDateIST } from '@/lib/date';
 
 interface EmployeeLookupWithStatus extends EmployeeLookup {
@@ -18,6 +18,8 @@ export function WorkReportForm() {
   const [employeeData, setEmployeeData] = useState<EmployeeLookupWithStatus | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [session, setSession] = useState<SessionUser | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   
   const [status, setStatus] = useState<WorkStatus>('working'); // Default to 'working'
   const [workReport, setWorkReport] = useState('');
@@ -37,6 +39,34 @@ export function WorkReportForm() {
   
   // Check if selected date is today (IST)
   const isToday = selectedDate === today;
+
+  // Check if user is logged in and auto-fill employee ID
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          setSession(data.data);
+          // Auto-fill employee ID if user is logged in
+          setEmployeeId(data.data.employeeId);
+        }
+      } catch (err) {
+        console.error('Failed to fetch session:', err);
+      } finally {
+        setSessionLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // Auto-lookup employee when session is loaded and employee ID is set
+  useEffect(() => {
+    if (!sessionLoading && session && employeeId && !employeeData && !lookupLoading) {
+      handleEmployeeLookup();
+    }
+  }, [sessionLoading, session, employeeId]);
   
   // Handle calendar icon click
   const handleCalendarClick = () => {
@@ -221,7 +251,10 @@ export function WorkReportForm() {
   };
 
   const resetForm = () => {
-    setEmployeeId('');
+    // Keep employee ID if user is logged in, otherwise clear it
+    if (!session) {
+      setEmployeeId('');
+    }
     setEmployeeData(null);
     setLookupError('');
     setStatus('working');
@@ -229,6 +262,13 @@ export function WorkReportForm() {
     setOnDuty(false);
     setSelectedDate(today);
     setSubmitted(false);
+    
+    // Re-trigger lookup if user is logged in
+    if (session) {
+      setTimeout(() => {
+        handleEmployeeLookup();
+      }, 100);
+    }
   };
 
   if (submitted) {
@@ -252,6 +292,18 @@ export function WorkReportForm() {
     );
   }
 
+  // Show loading while checking session
+  if (sessionLoading) {
+    return (
+      <div className="border rounded-xl overflow-hidden bg-card relative">
+        <div className="p-8 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Checking login status...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border rounded-xl overflow-hidden bg-card relative">
       {/* Header */}
@@ -259,7 +311,9 @@ export function WorkReportForm() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="font-semibold">Daily Work Report</h2>
-            <p className="text-sm text-muted-foreground">{formattedDate}</p>
+            <p className="text-sm text-muted-foreground">
+              {session ? `Welcome, ${session.name}` : formattedDate}
+            </p>
           </div>
           <div className="relative">
             <button
@@ -307,31 +361,44 @@ export function WorkReportForm() {
       <form onSubmit={handleSubmit} className="p-5 space-y-5">
         {/* Employee ID Lookup */}
         <div className="space-y-2">
-          <Label htmlFor="employeeId" className="text-sm font-medium">Employee ID</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="employeeId" className="text-sm font-medium">Employee ID</Label>
+            {session && (
+              <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Auto-detected
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             <Input
               id="employeeId"
               type="text"
-              placeholder="Enter your employee ID"
+              placeholder={sessionLoading ? "Checking login status..." : "Enter your employee ID"}
               value={employeeId}
               onChange={(e) => {
-                setEmployeeId(e.target.value);
-                setEmployeeData(null);
-                setLookupError('');
+                if (!session) { // Only allow manual changes if not logged in
+                  setEmployeeId(e.target.value);
+                  setEmployeeData(null);
+                  setLookupError('');
+                }
               }}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleEmployeeLookup())}
-              disabled={lookupLoading}
-              className="flex-1"
+              onKeyDown={(e) => e.key === 'Enter' && !session && (e.preventDefault(), handleEmployeeLookup())}
+              disabled={lookupLoading || sessionLoading || !!session}
+              readOnly={!!session}
+              className={`flex-1 ${session ? 'bg-muted cursor-not-allowed' : ''}`}
             />
-            <Button 
-              type="button" 
-              variant="outline"
-              size="icon"
-              onClick={handleEmployeeLookup}
-              disabled={lookupLoading || !employeeId.trim()}
-            >
-              {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            </Button>
+            {!session && (
+              <Button 
+                type="button" 
+                variant="outline"
+                size="icon"
+                onClick={handleEmployeeLookup}
+                disabled={lookupLoading || !employeeId.trim() || sessionLoading}
+              >
+                {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            )}
           </div>
           {lookupError && (
             <div className="flex items-center gap-2 text-sm text-destructive animate-fade-in">

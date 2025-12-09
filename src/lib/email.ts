@@ -134,3 +134,182 @@ WorkReport Team
   return sendEmail({ to: email, subject, text, html });
 }
 
+// Send password reset email
+export async function sendPasswordResetEmail(
+  email: string, 
+  resetToken: string, 
+  userName: string
+): Promise<boolean> {
+  // Get the base URL from environment or default to localhost
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : 'http://localhost:3000';
+  
+  const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+  
+  const subject = 'Reset Your Password - WorkReport';
+  const text = `
+Hello ${userName},
+
+You have requested to reset your password for your WorkReport account.
+
+Click the link below to reset your password:
+${resetUrl}
+
+This link will expire in 24 hours.
+
+If you did not request this password reset, please ignore this email. Your password will remain unchanged.
+
+Best regards,
+WorkReport Team
+  `.trim();
+  
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; 
+      background: #f5f5f5;
+      margin: 0;
+      padding: 40px 20px; 
+    }
+    .container { 
+      max-width: 480px; 
+      margin: 0 auto; 
+      background: white; 
+      border-radius: 12px; 
+      padding: 40px; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .logo { 
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: #0a0a0a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .logo-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: #0a0a0a;
+    }
+    h1 {
+      color: #0a0a0a;
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 20px 0;
+    }
+    p { 
+      color: #525252; 
+      font-size: 15px; 
+      line-height: 1.6;
+      margin: 0 0 16px 0;
+    }
+    .button-container {
+      text-align: center;
+      margin: 28px 0;
+    }
+    .button { 
+      display: inline-block;
+      background: #0a0a0a;
+      color: white !important; 
+      padding: 14px 28px; 
+      border-radius: 8px; 
+      text-decoration: none; 
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .link-box {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 20px 0;
+      word-break: break-all;
+      font-size: 13px;
+      color: #0a0a0a;
+      border: 1px solid #e5e5e5;
+    }
+    .info-box { 
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 20px 0;
+    }
+    .info-box p {
+      color: #525252;
+      margin: 0;
+      font-size: 13px;
+    }
+    .footer { 
+      color: #a3a3a3; 
+      font-size: 13px; 
+      margin-top: 32px; 
+      padding-top: 20px; 
+      border-top: 1px solid #e5e5e5;
+      text-align: center;
+    }
+    .expires {
+      display: inline-block;
+      background: #fafafa;
+      color: #525252;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid #e5e5e5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="logo-icon">W</div>
+      <span class="logo-text">WorkReport</span>
+    </div>
+    
+    <h1>Reset Your Password</h1>
+    
+    <p>Hello <strong>${userName}</strong>,</p>
+    
+    <p>We received a request to reset the password for your WorkReport account. Click the button below to create a new password:</p>
+    
+    <div class="button-container">
+      <a href="${resetUrl}" class="button">Reset Password</a>
+    </div>
+    
+    <p style="font-size: 13px; color: #737373;">If the button doesn't work, copy and paste this link into your browser:</p>
+    <div class="link-box">${resetUrl}</div>
+    
+    <p><span class="expires">Expires in 24 hours</span></p>
+    
+    <div class="info-box">
+      <p>If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+    </div>
+    
+    <div class="footer">
+      <p>Best regards,<br><strong>WorkReport Team</strong></p>
+      <p style="margin-top: 12px; font-size: 11px; color: #a3a3a3;">This is an automated message. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+  
+  return sendEmail({ to: email, subject, text, html });
+}
+

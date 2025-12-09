@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { hashPassword } from '@/lib/auth';
+import { sendPasswordResetEmail } from '@/lib/email';
 import { 
   getEmployeeByEmployeeId, 
   getEmployeeByEmail,
@@ -48,18 +49,22 @@ export async function POST(request: NextRequest) {
     // Store token
     createPasswordResetToken(employee.employeeId, token, expiresAt);
 
-    // In production, send email with reset link
-    // For now, log the token (in development) and return success
-    console.log(`[Password Reset] Token for ${employee.email}: ${token}`);
-    console.log(`[Password Reset] Reset URL: /reset-password?token=${token}`);
+    // Send password reset email
+    const emailSent = await sendPasswordResetEmail(employee.email, token, employee.name);
+    
+    if (!emailSent) {
+      console.error(`[Password Reset] Failed to send email to ${employee.email}`);
+    } else {
+      console.log(`[Password Reset] Email sent to ${employee.email}`);
+    }
 
-    // TODO: Implement email sending
-    // await sendPasswordResetEmail(employee.email, token);
+    // Mask email for response (show first 2 chars and domain)
+    const maskedEmail = employee.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
 
     return NextResponse.json<ApiResponse>({
       success: true,
-      message: 'If an account exists with this information, a password reset link will be sent.',
-      // In development, include the token for testing
+      message: `If an account exists, a password reset link has been sent to ${maskedEmail}`,
+      // In development, include the token for testing (remove in production if needed)
       ...(process.env.NODE_ENV === 'development' && { data: { token, resetUrl: `/reset-password?token=${token}` } }),
     });
   } catch (error) {
