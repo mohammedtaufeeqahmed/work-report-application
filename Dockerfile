@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Increase Node.js memory limit for build (8GB)
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
 # Copy package files
 COPY package*.json ./
 
@@ -12,7 +15,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application with increased memory
+# Use standalone output to reduce build size
 RUN npm run build
 
 # Production stage
