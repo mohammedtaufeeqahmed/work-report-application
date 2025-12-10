@@ -35,6 +35,15 @@ import type {
 // ============================================================================
 
 /**
+ * Helper to safely convert timestamp to ISO string
+ */
+function toISOString(value: Date | string | null | undefined): string {
+  if (!value) return new Date().toISOString();
+  if (typeof value === 'string') return value;
+  return value.toISOString();
+}
+
+/**
  * Convert database employee to application Employee type
  */
 function toEmployee(row: typeof employees.$inferSelect): EmployeeType {
@@ -51,8 +60,8 @@ function toEmployee(row: typeof employees.$inferSelect): EmployeeType {
     status: row.status as EmployeeType['status'],
     pageAccess: row.pageAccess,
     createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
+    updatedAt: toISOString(row.updatedAt),
   };
 }
 
@@ -60,6 +69,16 @@ function toEmployee(row: typeof employees.$inferSelect): EmployeeType {
  * Convert database employee to SafeEmployee (without password)
  */
 function toSafeEmployee(row: typeof employees.$inferSelect): SafeEmployee {
+  let pageAccess = null;
+  if (row.pageAccess) {
+    try {
+      pageAccess = JSON.parse(row.pageAccess);
+    } catch (error) {
+      console.error('Failed to parse pageAccess JSON:', error);
+      pageAccess = null;
+    }
+  }
+  
   return {
     id: row.id,
     employeeId: row.employeeId,
@@ -70,10 +89,10 @@ function toSafeEmployee(row: typeof employees.$inferSelect): SafeEmployee {
     branchId: row.branchId,
     role: row.role as SafeEmployee['role'],
     status: row.status as SafeEmployee['status'],
-    pageAccess: row.pageAccess ? JSON.parse(row.pageAccess) : null,
+    pageAccess,
     createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
+    updatedAt: toISOString(row.updatedAt),
   };
 }
 
@@ -91,7 +110,7 @@ function toWorkReport(row: typeof workReports.$inferSelect): WorkReport {
     status: row.status as WorkReport['status'],
     workReport: row.workReport,
     onDuty: row.onDuty,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
   };
 }
 
@@ -102,7 +121,7 @@ function toEntity(row: typeof entities.$inferSelect): Entity {
   return {
     id: row.id,
     name: row.name,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
   };
 }
 
@@ -114,7 +133,7 @@ function toBranch(row: typeof branches.$inferSelect): Branch {
     id: row.id,
     name: row.name,
     entityId: row.entityId,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
   };
 }
 
@@ -126,7 +145,7 @@ function toDepartment(row: typeof departments.$inferSelect): Department {
     id: row.id,
     name: row.name,
     entityId: row.entityId,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toISOString(row.createdAt),
   };
 }
 
@@ -710,8 +729,8 @@ export async function createPasswordResetToken(
     id: tokenData.id,
     employeeId: tokenData.employeeId,
     token: tokenData.token,
-    expiresAt: tokenData.expiresAt.toISOString(),
-    createdAt: tokenData.createdAt.toISOString(),
+    expiresAt: toISOString(tokenData.expiresAt),
+    createdAt: toISOString(tokenData.createdAt),
   };
 }
 
@@ -731,8 +750,8 @@ export async function getPasswordResetToken(token: string): Promise<PasswordRese
     id: result[0].id,
     employeeId: result[0].employeeId,
     token: result[0].token,
-    expiresAt: result[0].expiresAt.toISOString(),
-    createdAt: result[0].createdAt.toISOString(),
+    expiresAt: toISOString(result[0].expiresAt),
+    createdAt: toISOString(result[0].createdAt),
   };
 }
 
@@ -912,7 +931,7 @@ export async function getSetting(key: string): Promise<Setting | null> {
     id: result[0].id,
     key: result[0].key,
     value: result[0].value,
-    updatedAt: result[0].updatedAt.toISOString(),
+    updatedAt: toISOString(result[0].updatedAt),
   };
 }
 
@@ -925,7 +944,7 @@ export async function getAllSettings(): Promise<Setting[]> {
     id: row.id,
     key: row.key,
     value: row.value,
-    updatedAt: row.updatedAt.toISOString(),
+    updatedAt: toISOString(row.updatedAt),
   }));
 }
 
@@ -1018,8 +1037,8 @@ export async function createOTPToken(employeeId: string, otp: string, expiresAt:
     id: otpData.id,
     employeeId: otpData.employeeId,
     otp: otpData.otp,
-    expiresAt: otpData.expiresAt.toISOString(),
-    createdAt: otpData.createdAt.toISOString(),
+    expiresAt: toISOString(otpData.expiresAt),
+    createdAt: toISOString(otpData.createdAt),
   };
 }
 
@@ -1039,8 +1058,8 @@ export async function getOTPToken(employeeId: string, otp: string): Promise<OTPT
     id: result[0].id,
     employeeId: result[0].employeeId,
     otp: result[0].otp,
-    expiresAt: result[0].expiresAt.toISOString(),
-    createdAt: result[0].createdAt.toISOString(),
+    expiresAt: toISOString(result[0].expiresAt),
+    createdAt: toISOString(result[0].createdAt),
   };
 }
 
