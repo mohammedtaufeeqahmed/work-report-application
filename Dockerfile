@@ -3,8 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Increase Node.js memory limit for build (8GB)
-ENV NODE_OPTIONS="--max-old-space-size=8192"
+# Increase Node.js memory limit for build (2GB - adjusted for smaller EC2 instances)
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # Copy package files
 COPY package*.json ./
