@@ -55,6 +55,13 @@ async function getAccessToken(code: string): Promise<string> {
 
   if (!response.ok) {
     const error = await response.text();
+    console.error('Google OAuth token exchange failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error,
+      redirectUri,
+      clientId: clientId ? '***configured***' : 'NOT_CONFIGURED',
+    });
     throw new Error(`Token exchange failed: ${error}`);
   }
 
@@ -202,15 +209,31 @@ export async function GET(request: NextRequest) {
     await setSessionCookie(sessionUser);
 
     // Determine redirect URL
-    const redirectUrl = callbackUrl || getDashboardUrl(employee.role);
-    const redirect = new URL(redirectUrl, request.url);
+    let redirectUrl = callbackUrl || getDashboardUrl(employee.role);
+    
+    // Ensure redirectUrl is a valid absolute URL or path
+    try {
+      // Test if it's already a valid absolute URL
+      new URL(redirectUrl);
+    } catch {
+      // If not a valid URL, assume it's a path and make it absolute relative to the app URL
+      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+      redirectUrl = new URL(redirectUrl, appBaseUrl).toString();
+    }
 
-    return NextResponse.redirect(redirect);
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Google OAuth callback error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An error occurred during Google authentication';
+    console.error('Error details:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      requestUrl: request.url,
+      searchParams: Object.fromEntries(request.nextUrl.searchParams),
+    });
     return NextResponse.redirect(
       new URL(
-        `/login?error=${encodeURIComponent('An error occurred during Google authentication')}`,
+        `/login?error=${encodeURIComponent(errorMessage)}`,
         request.url
       )
     );

@@ -124,9 +124,14 @@ export async function setSessionCookie(user: SessionUser): Promise<void> {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
 
+  // Use secure cookies when running over HTTPS (production with Cloudflare)
+  // Check if we're in production and using HTTPS
+  const isSecure = process.env.NODE_ENV === 'production' || 
+                   process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://');
+
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: false,
+    secure: isSecure,
     sameSite: 'lax',
     expires: expiresAt,
     path: '/',

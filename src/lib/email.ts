@@ -49,15 +49,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   const transporter = getTransporter();
   
   if (!transporter) {
-    // Log email content in development when SMTP is not configured
+    // Log email content when SMTP is not configured
     console.log('\n========== EMAIL (Not Sent - SMTP Not Configured) ==========');
     console.log(`To: ${to}`);
     console.log(`From: ${from}`);
     console.log(`Reply-To: ${replyTo}`);
     console.log(`Subject: ${subject}`);
     console.log(`Body: ${text}`);
+    if (html) {
+      console.log(`HTML: ${html.substring(0, 200)}...`);
+    }
     console.log('=============================================================\n');
-    return true; // Return true in dev mode so the flow continues
+    // Return false in production, true only in development
+    return process.env.NODE_ENV === 'development';
   }
   
   try {
