@@ -119,16 +119,16 @@ status "Environment file created"
 # Step 4: Stop existing container if running
 echo ""
 echo "Step 4: Stopping existing containers..."
-docker compose down 2>/dev/null || true
+$SUDO docker compose down 2>/dev/null || true
 status "Existing containers stopped"
 
 # Step 5: Build and start
 echo ""
 echo "Step 5: Building and starting application..."
-docker compose build --no-cache
+$SUDO docker compose build --no-cache
 status "Docker image built"
 
-docker compose up -d
+$SUDO docker compose up -d
 status "Application started"
 
 # Step 6: Wait for application to be healthy
