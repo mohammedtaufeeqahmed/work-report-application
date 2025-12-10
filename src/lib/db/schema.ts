@@ -74,7 +74,7 @@ export const employees = pgTable('employees', {
   role: text('role', { enum: ['employee', 'manager', 'admin', 'superadmin', 'boardmember'] }).notNull().default('employee'),
   status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
   pageAccess: text('page_access'), // JSON string of PageAccess
-  createdBy: integer('created_by').references(() => employees.id, { onDelete: 'set null' }),
+  createdBy: integer('created_by'), // Self-referential FK added in database initialization
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
