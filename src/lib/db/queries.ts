@@ -239,7 +239,10 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       createdBy: input.createdBy ?? null,
     })
     .returning();
-  return toEmployee(result[0]);
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create employee');
+  }
+  return toEmployee(result[0]!);
 }
 
 /**
@@ -314,7 +317,10 @@ export async function getAllEntities(): Promise<Entity[]> {
  */
 export async function createEntity(input: CreateEntityInput): Promise<Entity> {
   const result = await db.insert(entities).values({ name: input.name }).returning();
-  return toEntity(result[0]);
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create entity');
+  }
+  return toEntity(result[0]!);
 }
 
 /**
@@ -366,7 +372,10 @@ export async function getBranchesByEntity(entityId: number): Promise<Branch[]> {
  */
 export async function createBranch(input: CreateBranchInput): Promise<Branch> {
   const result = await db.insert(branches).values({ name: input.name, entityId: input.entityId }).returning();
-  return toBranch(result[0]);
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create branch');
+  }
+  return toBranch(result[0]!);
 }
 
 /**
@@ -450,7 +459,10 @@ export async function createWorkReport(input: CreateWorkReportInput): Promise<Wo
       onDuty: input.onDuty ?? false,
     })
     .returning();
-  return toWorkReport(result[0]);
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create work report');
+  }
+  return toWorkReport(result[0]!);
 }
 
 /**
@@ -690,12 +702,16 @@ export async function createPasswordResetToken(
     })
     .returning();
 
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create password reset token');
+  }
+  const tokenData = result[0]!;
   return {
-    id: result[0].id,
-    employeeId: result[0].employeeId,
-    token: result[0].token,
-    expiresAt: result[0].expiresAt.toISOString(),
-    createdAt: result[0].createdAt.toISOString(),
+    id: tokenData.id,
+    employeeId: tokenData.employeeId,
+    token: tokenData.token,
+    expiresAt: tokenData.expiresAt.toISOString(),
+    createdAt: tokenData.createdAt.toISOString(),
   };
 }
 
@@ -787,7 +803,10 @@ export async function createDepartment(input: CreateDepartmentInput): Promise<De
       entityId: input.entityId ?? null,
     })
     .returning();
-  return toDepartment(result[0]);
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create department');
+  }
+  return toDepartment(result[0]!);
 }
 
 /**
@@ -991,12 +1010,16 @@ export async function createOTPToken(employeeId: string, otp: string, expiresAt:
     })
     .returning();
 
+  if (!result || result.length === 0) {
+    throw new Error('Failed to create OTP token');
+  }
+  const otpData = result[0]!;
   return {
-    id: result[0].id,
-    employeeId: result[0].employeeId,
-    otp: result[0].otp,
-    expiresAt: result[0].expiresAt.toISOString(),
-    createdAt: result[0].createdAt.toISOString(),
+    id: otpData.id,
+    employeeId: otpData.employeeId,
+    otp: otpData.otp,
+    expiresAt: otpData.expiresAt.toISOString(),
+    createdAt: otpData.createdAt.toISOString(),
   };
 }
 
