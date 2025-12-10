@@ -1,315 +1,227 @@
-import { getDatabase } from './database';
+import { pgTable, serial, text, timestamp, integer, boolean, unique, index } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
-/**
- * Initialize database schema
- * Creates all required tables if they don't exist
- */
-export function initializeSchema(): void {
-  const db = getDatabase();
+// ============================================================================
+// Entities Table
+// ============================================================================
+export const entities = pgTable('entities', {
+  id: serial('id').primaryKey(),
+  name: text('name').unique().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
-  // Create entities table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+export const entitiesRelations = relations(entities, ({ many }) => ({
+  branches: many(branches),
+  departments: many(departments),
+  employees: many(employees),
+}));
 
-  // Create branches table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS branches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      entityId INTEGER NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(name, entityId),
-      FOREIGN KEY (entityId) REFERENCES entities(id) ON DELETE CASCADE
-    )
-  `);
+// ============================================================================
+// Branches Table
+// ============================================================================
+export const branches = pgTable('branches', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  entityId: integer('entity_id').notNull().references(() => entities.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  unique('branches_name_entity_unique').on(table.name, table.entityId),
+  index('idx_branches_entity_id').on(table.entityId),
+]);
 
-  // Create departments table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS departments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      entityId INTEGER,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(name, entityId),
-      FOREIGN KEY (entityId) REFERENCES entities(id) ON DELETE CASCADE
-    )
-  `);
+export const branchesRelations = relations(branches, ({ one, many }) => ({
+  entity: one(entities, {
+    fields: [branches.entityId],
+    references: [entities.id],
+  }),
+  employees: many(employees),
+}));
 
-  // Add entityId column to existing departments table if it doesn't exist
-  try {
-    db.exec(`ALTER TABLE departments ADD COLUMN entityId INTEGER REFERENCES entities(id) ON DELETE CASCADE`);
-  } catch {
-    // Column already exists, ignore
-  }
+// ============================================================================
+// Departments Table
+// ============================================================================
+export const departments = pgTable('departments', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  entityId: integer('entity_id').references(() => entities.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  unique('departments_name_entity_unique').on(table.name, table.entityId),
+  index('idx_departments_entity_id').on(table.entityId),
+  index('idx_departments_name').on(table.name),
+]);
 
-  // Create employees table (used for authentication and user management)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS employees (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employeeId TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      department TEXT NOT NULL,
-      password TEXT NOT NULL,
-      entityId INTEGER,
-      branchId INTEGER,
-      role TEXT NOT NULL DEFAULT 'employee' CHECK(role IN ('employee', 'manager', 'admin', 'superadmin', 'boardmember')),
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
-      pageAccess TEXT,
-      createdBy INTEGER,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (entityId) REFERENCES entities(id) ON DELETE SET NULL,
-      FOREIGN KEY (branchId) REFERENCES branches(id) ON DELETE SET NULL,
-      FOREIGN KEY (createdBy) REFERENCES employees(id) ON DELETE SET NULL
-    )
-  `);
+export const departmentsRelations = relations(departments, ({ one, many }) => ({
+  entity: one(entities, {
+    fields: [departments.entityId],
+    references: [entities.id],
+  }),
+  managerDepartments: many(managerDepartments),
+}));
 
-  // Add pageAccess column to existing employees table if it doesn't exist
-  try {
-    db.exec(`ALTER TABLE employees ADD COLUMN pageAccess TEXT`);
-  } catch {
-    // Column already exists, ignore
-  }
+// ============================================================================
+// Employees Table
+// ============================================================================
+export const employees = pgTable('employees', {
+  id: serial('id').primaryKey(),
+  employeeId: text('employee_id').unique().notNull(),
+  name: text('name').notNull(),
+  email: text('email').unique().notNull(),
+  department: text('department').notNull(),
+  password: text('password').notNull(),
+  entityId: integer('entity_id').references(() => entities.id, { onDelete: 'set null' }),
+  branchId: integer('branch_id').references(() => branches.id, { onDelete: 'set null' }),
+  role: text('role', { enum: ['employee', 'manager', 'admin', 'superadmin', 'boardmember'] }).notNull().default('employee'),
+  status: text('status', { enum: ['active', 'inactive'] }).notNull().default('active'),
+  pageAccess: text('page_access'), // JSON string of PageAccess
+  createdBy: integer('created_by').references(() => employees.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_employees_employee_id').on(table.employeeId),
+  index('idx_employees_email').on(table.email),
+  index('idx_employees_entity_id').on(table.entityId),
+  index('idx_employees_branch_id').on(table.branchId),
+  index('idx_employees_role').on(table.role),
+  index('idx_employees_status').on(table.status),
+  index('idx_employees_role_status').on(table.role, table.status),
+  index('idx_employees_entity_branch').on(table.entityId, table.branchId),
+]);
 
-  // Create manager_departments junction table (for managers with multiple departments)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS manager_departments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      managerId INTEGER NOT NULL,
-      departmentId INTEGER NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(managerId, departmentId),
-      FOREIGN KEY (managerId) REFERENCES employees(id) ON DELETE CASCADE,
-      FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE
-    )
-  `);
+export const employeesRelations = relations(employees, ({ one, many }) => ({
+  entity: one(entities, {
+    fields: [employees.entityId],
+    references: [entities.id],
+  }),
+  branch: one(branches, {
+    fields: [employees.branchId],
+    references: [branches.id],
+  }),
+  creator: one(employees, {
+    fields: [employees.createdBy],
+    references: [employees.id],
+    relationName: 'creator',
+  }),
+  managerDepartments: many(managerDepartments),
+}));
 
-  // Create workReports table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS workReports (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employeeId TEXT NOT NULL,
-      date DATE NOT NULL,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      department TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('working', 'leave')),
-      workReport TEXT,
-      onDuty INTEGER DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  
-  // Add onDuty column to existing workReports table if it doesn't exist
-  try {
-    db.exec(`ALTER TABLE workReports ADD COLUMN onDuty INTEGER DEFAULT 0`);
-  } catch {
-    // Column already exists, ignore
-  }
+// ============================================================================
+// Manager Departments Junction Table
+// ============================================================================
+export const managerDepartments = pgTable('manager_departments', {
+  id: serial('id').primaryKey(),
+  managerId: integer('manager_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  departmentId: integer('department_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  unique('manager_departments_unique').on(table.managerId, table.departmentId),
+  index('idx_manager_departments_manager_id').on(table.managerId),
+  index('idx_manager_departments_department_id').on(table.departmentId),
+]);
 
-  // Create passwordResetTokens table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS passwordResetTokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employeeId TEXT NOT NULL,
-      token TEXT UNIQUE NOT NULL,
-      expiresAt DATETIME NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+export const managerDepartmentsRelations = relations(managerDepartments, ({ one }) => ({
+  manager: one(employees, {
+    fields: [managerDepartments.managerId],
+    references: [employees.id],
+  }),
+  department: one(departments, {
+    fields: [managerDepartments.departmentId],
+    references: [departments.id],
+  }),
+}));
 
-  // Create settings table for system-wide configurations
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      key TEXT UNIQUE NOT NULL,
-      value TEXT NOT NULL,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+// ============================================================================
+// Work Reports Table
+// ============================================================================
+export const workReports = pgTable('work_reports', {
+  id: serial('id').primaryKey(),
+  employeeId: text('employee_id').notNull(),
+  date: text('date').notNull(), // DATE stored as text (YYYY-MM-DD format)
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  department: text('department').notNull(),
+  status: text('status', { enum: ['working', 'leave'] }).notNull(),
+  workReport: text('work_report'),
+  onDuty: boolean('on_duty').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_work_reports_employee_id').on(table.employeeId),
+  index('idx_work_reports_date').on(table.date),
+  index('idx_work_reports_status').on(table.status),
+  index('idx_work_reports_department').on(table.department),
+  index('idx_work_reports_employee_date').on(table.employeeId, table.date),
+  index('idx_work_reports_date_status').on(table.date, table.status),
+  index('idx_work_reports_department_date').on(table.department, table.date),
+  index('idx_work_reports_date_department_status').on(table.date, table.department, table.status),
+  index('idx_work_reports_created_at').on(table.createdAt),
+]);
 
-  // Create OTP tokens table for email verification (password change)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS otpTokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employeeId TEXT NOT NULL,
-      otp TEXT NOT NULL,
-      expiresAt DATETIME NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+// ============================================================================
+// Password Reset Tokens Table
+// ============================================================================
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: serial('id').primaryKey(),
+  employeeId: text('employee_id').notNull(),
+  token: text('token').unique().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_password_reset_tokens_employee_id').on(table.employeeId),
+  index('idx_password_reset_tokens_token').on(table.token),
+  index('idx_password_reset_tokens_expires_at').on(table.expiresAt),
+]);
 
-  // Insert default settings for work report edit permissions
-  db.exec(`
-    INSERT OR IGNORE INTO settings (key, value) VALUES 
-      ('employee_can_edit_own_reports', 'false'),
-      ('manager_can_edit_team_reports', 'true'),
-      ('admin_can_edit_reports', 'true'),
-      ('superadmin_can_edit_reports', 'true')
-  `);
+// ============================================================================
+// OTP Tokens Table
+// ============================================================================
+export const otpTokens = pgTable('otp_tokens', {
+  id: serial('id').primaryKey(),
+  employeeId: text('employee_id').notNull(),
+  otp: text('otp').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_otp_tokens_employee_id').on(table.employeeId),
+  index('idx_otp_tokens_otp').on(table.otp),
+  index('idx_otp_tokens_expires_at').on(table.expiresAt),
+]);
 
-  // ============================================
-  // Indexes for better query performance
-  // Optimized for 40-50 concurrent users
-  // ============================================
-  
-  // Basic employee indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_employees_employeeId ON employees(employeeId);
-    CREATE INDEX IF NOT EXISTS idx_employees_email ON employees(email);
-    CREATE INDEX IF NOT EXISTS idx_employees_entityId ON employees(entityId);
-    CREATE INDEX IF NOT EXISTS idx_employees_branchId ON employees(branchId);
-    CREATE INDEX IF NOT EXISTS idx_employees_role ON employees(role);
-    CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
-  `);
-  
-  // Composite index for employee lookups (role + status - common filter combo)
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_employees_role_status ON employees(role, status);
-    CREATE INDEX IF NOT EXISTS idx_employees_entity_branch ON employees(entityId, branchId);
-  `);
-  
-  // Branch indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_branches_entityId ON branches(entityId);
-  `);
-  
-  // Manager departments indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_manager_departments_managerId ON manager_departments(managerId);
-    CREATE INDEX IF NOT EXISTS idx_manager_departments_departmentId ON manager_departments(departmentId);
-  `);
-  
-  // Basic work reports indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_employeeId ON workReports(employeeId);
-    CREATE INDEX IF NOT EXISTS idx_workReports_date ON workReports(date);
-    CREATE INDEX IF NOT EXISTS idx_workReports_status ON workReports(status);
-    CREATE INDEX IF NOT EXISTS idx_workReports_department ON workReports(department);
-  `);
-  
-  // ============================================
-  // Composite indexes for common query patterns
-  // These significantly improve concurrent access
-  // ============================================
-  
-  // Most common query: check if employee submitted report for a date
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_employeeId_date 
-    ON workReports(employeeId, date DESC);
-  `);
-  
-  // Date range queries with status filter (analytics)
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_date_status 
-    ON workReports(date DESC, status);
-  `);
-  
-  // Department + date queries (manager dashboards)
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_department_date 
-    ON workReports(department, date DESC);
-  `);
-  
-  // Full analytics composite index
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_date_department_status 
-    ON workReports(date DESC, department, status);
-  `);
-  
-  // Created at for sorting (newest first)
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_workReports_createdAt 
-    ON workReports(createdAt DESC);
-  `);
-  
-  // Password reset token indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_employeeId ON passwordResetTokens(employeeId);
-    CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_token ON passwordResetTokens(token);
-    CREATE INDEX IF NOT EXISTS idx_passwordResetTokens_expiresAt ON passwordResetTokens(expiresAt);
-  `);
-  
-  // Department indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_departments_entityId ON departments(entityId);
-    CREATE INDEX IF NOT EXISTS idx_departments_name ON departments(name);
-  `);
+// ============================================================================
+// Settings Table
+// ============================================================================
+export const settings = pgTable('settings', {
+  id: serial('id').primaryKey(),
+  key: text('key').unique().notNull(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
-  // OTP token indexes
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_otpTokens_employeeId ON otpTokens(employeeId);
-    CREATE INDEX IF NOT EXISTS idx_otpTokens_otp ON otpTokens(otp);
-    CREATE INDEX IF NOT EXISTS idx_otpTokens_expiresAt ON otpTokens(expiresAt);
-  `);
+// ============================================================================
+// Type Exports for use in queries
+// ============================================================================
+export type Entity = typeof entities.$inferSelect;
+export type NewEntity = typeof entities.$inferInsert;
 
-  console.log('[DB] Database schema initialized with optimized indexes');
-}
+export type Branch = typeof branches.$inferSelect;
+export type NewBranch = typeof branches.$inferInsert;
 
-/**
- * Seed initial data (optional - for development/testing)
- */
-export async function seedInitialData(): Promise<void> {
-  const db = getDatabase();
-  const bcrypt = await import('bcrypt');
-  
-  // Check if we already have data
-  const entityCount = db.prepare('SELECT COUNT(*) as count FROM entities').get() as { count: number };
-  if (entityCount.count > 0) {
-    console.log('Database already has data, skipping seed');
-    return;
-  }
+export type Department = typeof departments.$inferSelect;
+export type NewDepartment = typeof departments.$inferInsert;
 
-  // Create a default entity
-  const entityResult = db.prepare('INSERT INTO entities (name) VALUES (?)').run('Default Entity');
-  const entityId = entityResult.lastInsertRowid as number;
+export type Employee = typeof employees.$inferSelect;
+export type NewEmployee = typeof employees.$inferInsert;
 
-  // Create a default branch
-  const branchResult = db.prepare('INSERT INTO branches (name, entityId) VALUES (?, ?)').run('Default Branch', entityId);
-  const branchId = branchResult.lastInsertRowid as number;
+export type ManagerDepartment = typeof managerDepartments.$inferSelect;
+export type NewManagerDepartment = typeof managerDepartments.$inferInsert;
 
-  // Create a super admin user
-  const hashedPassword = await bcrypt.hash('admin123', 10);
-  db.prepare(`
-    INSERT INTO employees (employeeId, name, email, department, password, entityId, branchId, role, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run('ADMIN001', 'Super Admin', 'admin@company.com', 'Administration', hashedPassword, entityId, branchId, 'superadmin', 'active');
+export type WorkReport = typeof workReports.$inferSelect;
+export type NewWorkReport = typeof workReports.$inferInsert;
 
-  console.log('Initial data seeded successfully');
-  console.log('Super Admin credentials: Employee ID: ADMIN001, Password: admin123');
-}
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 
-/**
- * Drop all tables (use with caution - for development only)
- */
-export function dropAllTables(): void {
-  const db = getDatabase();
-  
-  db.exec(`
-    DROP TABLE IF EXISTS passwordResetTokens;
-    DROP TABLE IF EXISTS workReports;
-    DROP TABLE IF EXISTS manager_departments;
-    DROP TABLE IF EXISTS employees;
-    DROP TABLE IF EXISTS departments;
-    DROP TABLE IF EXISTS branches;
-    DROP TABLE IF EXISTS entities;
-  `);
-  
-  console.log('All tables dropped');
-}
+export type OtpToken = typeof otpTokens.$inferSelect;
+export type NewOtpToken = typeof otpTokens.$inferInsert;
 
-/**
- * Reset database (drop and recreate)
- */
-export async function resetDatabase(): Promise<void> {
-  dropAllTables();
-  initializeSchema();
-  await seedInitialData();
-}
-
+export type Setting = typeof settings.$inferSelect;
+export type NewSetting = typeof settings.$inferInsert;

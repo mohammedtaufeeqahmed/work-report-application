@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getDatabase } from '@/lib/db/database';
+import { pool } from '@/lib/db/database';
 import { getISTNow, formatDateToIST } from '@/lib/date';
 import type { ApiResponse } from '@/types';
 
@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const db = getDatabase();
     const url = new URL(request.url);
     const days = parseInt(url.searchParams.get('days') || '30');
     // Use IST for date calculations
@@ -58,59 +57,60 @@ export async function GET(request: NextRequest) {
     const startDateStr = formatDateToIST(startDate);
 
     // Get summary stats
-    const summaryQuery = db.prepare(`
+    const summaryResult = await pool.query(`
       SELECT 
-        COUNT(*) as totalReports,
-        SUM(CASE WHEN status = 'working' THEN 1 ELSE 0 END) as workingDays,
-        SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as leaveDays,
-        COUNT(DISTINCT employeeId) as uniqueEmployees
-      FROM workReports
-      WHERE date >= ?
-    `);
-    const summary = summaryQuery.get(startDateStr) as {
-      totalReports: number;
-      workingDays: number;
-      leaveDays: number;
-      uniqueEmployees: number;
+        COUNT(*) as "totalReports",
+        SUM(CASE WHEN status = 'working' THEN 1 ELSE 0 END) as "workingDays",
+        SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as "leaveDays",
+        COUNT(DISTINCT employee_id) as "uniqueEmployees"
+      FROM work_reports
+      WHERE date >= $1
+    `, [startDateStr]);
+    
+    const summary = summaryResult.rows[0] || {
+      totalReports: 0,
+      workingDays: 0,
+      leaveDays: 0,
+      uniqueEmployees: 0,
     };
 
     // Get daily stats
-    const dailyQuery = db.prepare(`
+    const dailyResult = await pool.query(`
       SELECT 
         date,
         SUM(CASE WHEN status = 'working' THEN 1 ELSE 0 END) as working,
         SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as leave,
         COUNT(*) as total
-      FROM workReports
-      WHERE date >= ?
+      FROM work_reports
+      WHERE date >= $1
       GROUP BY date
       ORDER BY date DESC
       LIMIT 30
-    `);
-    const dailyStats = dailyQuery.all(startDateStr) as DailyStats[];
+    `, [startDateStr]);
+    const dailyStats = dailyResult.rows as DailyStats[];
 
     // Get department stats
-    const departmentQuery = db.prepare(`
+    const departmentResult = await pool.query(`
       SELECT 
         department,
         SUM(CASE WHEN status = 'working' THEN 1 ELSE 0 END) as working,
         SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as leave,
         COUNT(*) as total
-      FROM workReports
-      WHERE date >= ?
+      FROM work_reports
+      WHERE date >= $1
       GROUP BY department
       ORDER BY total DESC
-    `);
-    const departmentStats = departmentQuery.all(startDateStr) as DepartmentStats[];
+    `, [startDateStr]);
+    const departmentStats = departmentResult.rows as DepartmentStats[];
 
     // Get recent reports
-    const recentQuery = db.prepare(`
-      SELECT employeeId, name, date, status, department
-      FROM workReports
-      ORDER BY createdAt DESC
+    const recentResult = await pool.query(`
+      SELECT employee_id as "employeeId", name, date, status, department
+      FROM work_reports
+      ORDER BY created_at DESC
       LIMIT 10
     `);
-    const recentReports = recentQuery.all() as Array<{
+    const recentReports = recentResult.rows as Array<{
       employeeId: string;
       name: string;
       date: string;
@@ -120,10 +120,10 @@ export async function GET(request: NextRequest) {
 
     const analyticsData: AnalyticsData = {
       summary: {
-        totalReports: summary.totalReports || 0,
-        workingDays: summary.workingDays || 0,
-        leaveDays: summary.leaveDays || 0,
-        uniqueEmployees: summary.uniqueEmployees || 0,
+        totalReports: parseInt(summary.totalReports) || 0,
+        workingDays: parseInt(summary.workingDays) || 0,
+        leaveDays: parseInt(summary.leaveDays) || 0,
+        uniqueEmployees: parseInt(summary.uniqueEmployees) || 0,
       },
       dailyStats: dailyStats.reverse(), // Reverse to show oldest first for charts
       departmentStats,
@@ -142,4 +142,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

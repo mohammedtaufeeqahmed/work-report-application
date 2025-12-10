@@ -15,7 +15,7 @@ export async function POST() {
       );
     }
 
-    const employee = getEmployeeByEmployeeId(session.employeeId);
+    const employee = await getEmployeeByEmployeeId(session.employeeId);
     if (!employee) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'User not found' },
@@ -24,7 +24,7 @@ export async function POST() {
     }
 
     // Delete any existing OTP tokens for this user
-    deleteOTPTokensForEmployee(employee.employeeId);
+    await deleteOTPTokensForEmployee(employee.employeeId);
 
     // Generate new OTP
     const otp = generateOTP();
@@ -33,7 +33,7 @@ export async function POST() {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 10);
     
-    createOTPToken(employee.employeeId, otp, expiresAt);
+    await createOTPToken(employee.employeeId, otp, expiresAt);
 
     // Send OTP via email
     const emailSent = await sendOTPEmail(employee.email, otp, employee.name);
@@ -61,4 +61,3 @@ export async function POST() {
     );
   }
 }
-

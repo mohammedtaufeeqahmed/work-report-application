@@ -1,138 +1,193 @@
 #!/bin/bash
+
+# =============================================================================
+# Work Report App - Automated Deployment Script
+# Run with: curl -sSL <raw-url-to-this-script> | bash
+# Or: bash deploy.sh
+# =============================================================================
+
 set -e
+
+# Configuration - EDIT THESE VALUES
+APP_NAME="work-report-app"
+REPO_URL="https://github.com/mohammedtaufeeqahmed/work-report-application.git"
+INSTALL_DIR="/opt/work-report-app"
+DATABASE_URL="postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport"
+JWT_SECRET="$(openssl rand -base64 32)"  # Auto-generate secure secret
+APP_URL=""  # Set your domain if you have one, e.g., https://app.yourdomain.com
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-echo -e "${GREEN}🚀 Work Report App - One-Click Deployment${NC}"
-echo "=============================================="
+echo -e "${GREEN}"
+echo "============================================================"
+echo "       Work Report App - Automated Deployment"
+echo "============================================================"
+echo -e "${NC}"
 
-# Configuration
-APP_DIR="/var/www/work-report-app"
-REPO_URL="https://github.com/mohammedtaufeeqahmed/work-report-application.git"
+# Function to print status
+status() {
+    echo -e "${GREEN}[✓]${NC} $1"
+}
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}Please run as root (use sudo)${NC}"
+warn() {
+    echo -e "${YELLOW}[!]${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[✗]${NC} $1"
     exit 1
+}
+
+# Check if running as root or with sudo
+if [ "$EUID" -ne 0 ]; then
+    warn "Running without root. Some commands may require sudo."
+    SUDO="sudo"
+else
+    SUDO=""
 fi
 
-# Update system
-echo -e "${YELLOW}📦 Updating system packages...${NC}"
-apt update && apt upgrade -y
-
-# Install Docker if not installed
+# Step 1: Install Docker if not present
+echo ""
+echo "Step 1: Checking Docker installation..."
 if ! command -v docker &> /dev/null; then
-    echo -e "${YELLOW}🐳 Installing Docker...${NC}"
-    curl -fsSL https://get.docker.com | sh
-    systemctl enable docker
-    systemctl start docker
+    status "Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    $SUDO sh get-docker.sh
+    $SUDO usermod -aG docker $USER
+    rm get-docker.sh
+    status "Docker installed successfully"
 else
-    echo -e "${GREEN}✓ Docker already installed${NC}"
+    status "Docker is already installed"
 fi
 
-# Install Docker Compose if not installed
-if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-    echo -e "${YELLOW}🐳 Installing Docker Compose...${NC}"
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+# Install Docker Compose plugin if not present
+if ! docker compose version &> /dev/null; then
+    status "Installing Docker Compose..."
+    $SUDO apt-get update
+    $SUDO apt-get install -y docker-compose-plugin
+    status "Docker Compose installed"
 else
-    echo -e "${GREEN}✓ Docker Compose already installed${NC}"
+    status "Docker Compose is already installed"
 fi
 
-# Install Git if not installed
-if ! command -v git &> /dev/null; then
-    echo -e "${YELLOW}📥 Installing Git...${NC}"
-    apt install -y git
-fi
+# Start Docker service
+$SUDO systemctl start docker 2>/dev/null || true
+$SUDO systemctl enable docker 2>/dev/null || true
 
-# Create app directory
-echo -e "${YELLOW}📁 Setting up application directory...${NC}"
-mkdir -p $APP_DIR
-cd $APP_DIR
-
-# Clone or pull repository
-if [ -d ".git" ]; then
-    echo -e "${YELLOW}📥 Pulling latest code...${NC}"
-    git pull origin main
+# Step 2: Clone or update repository
+echo ""
+echo "Step 2: Setting up application..."
+if [ -d "$INSTALL_DIR" ]; then
+    status "Updating existing installation..."
+    cd "$INSTALL_DIR"
+    git pull origin main || git pull origin master || true
 else
-    echo -e "${YELLOW}📥 Cloning repository...${NC}"
-    git clone $REPO_URL .
+    status "Cloning repository..."
+    $SUDO mkdir -p "$INSTALL_DIR"
+    $SUDO chown $USER:$USER "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 fi
 
-# Create data directory
-mkdir -p data
+# Step 3: Create environment file
+echo ""
+echo "Step 3: Creating environment configuration..."
+cat > .env << EOF
+# Database Configuration
+DATABASE_URL=${DATABASE_URL}
 
-# Create .env file if not exists
-if [ ! -f ".env" ]; then
-    echo -e "${YELLOW}🔐 Creating environment file...${NC}"
-    JWT_SECRET=$(openssl rand -base64 32)
-    cat > .env << EOF
-JWT_SECRET=$JWT_SECRET
-NODE_ENV=production
+# JWT Secret (auto-generated)
+JWT_SECRET=${JWT_SECRET}
+
+# Application URL (optional)
+NEXT_PUBLIC_APP_URL=${APP_URL}
+
+# SMTP Configuration (optional - for password reset emails)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+EMAIL_FROM=
+EMAIL_FROM_NAME=WorkReport
 EOF
-    echo -e "${GREEN}✓ Generated JWT_SECRET automatically${NC}"
+status "Environment file created"
+
+# Step 4: Stop existing container if running
+echo ""
+echo "Step 4: Stopping existing containers..."
+docker compose down 2>/dev/null || true
+status "Existing containers stopped"
+
+# Step 5: Build and start
+echo ""
+echo "Step 5: Building and starting application..."
+docker compose build --no-cache
+status "Docker image built"
+
+docker compose up -d
+status "Application started"
+
+# Step 6: Wait for application to be healthy
+echo ""
+echo "Step 6: Waiting for application to be healthy..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -s http://localhost:3000 > /dev/null 2>&1; then
+        status "Application is healthy"
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "  Waiting... ($RETRY_COUNT/$MAX_RETRIES)"
+    sleep 2
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    error "Application failed to start. Check logs with: docker compose logs"
 fi
 
-# Add swap space if not exists (for small instances)
-if [ ! -f "/swapfile" ]; then
-    echo -e "${YELLOW}💾 Creating swap space (2GB)...${NC}"
-    fallocate -l 2G /swapfile
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-    echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    echo -e "${GREEN}✓ Swap space created${NC}"
-fi
+# Step 7: Initialize database
+echo ""
+echo "Step 7: Initializing database..."
+sleep 3  # Extra wait for database connection
 
-# Stop existing containers if running
-echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
-docker-compose down 2>/dev/null || docker compose down 2>/dev/null || true
+INIT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/db/init)
+echo "  Response: $INIT_RESPONSE"
 
-# Build and start containers
-echo -e "${YELLOW}🔨 Building Docker images (this may take a few minutes)...${NC}"
-docker-compose build --no-cache 2>/dev/null || docker compose build --no-cache
-
-echo -e "${YELLOW}🚀 Starting application...${NC}"
-docker-compose up -d 2>/dev/null || docker compose up -d
-
-# Wait for app to be ready
-echo -e "${YELLOW}⏳ Waiting for application to start...${NC}"
-sleep 15
-
-# Health check
-if curl -s http://localhost:3000 > /dev/null; then
-    echo -e "${GREEN}✅ Application is running!${NC}"
+if echo "$INIT_RESPONSE" | grep -q '"success":true'; then
+    status "Database initialized successfully"
 else
-    echo -e "${YELLOW}⚠️  Application may still be starting. Check logs with: docker-compose logs${NC}"
+    warn "Database initialization returned unexpected response"
+    echo "  You may need to manually call: curl -X POST http://localhost:3000/api/db/init"
 fi
 
-# Get public IP
-PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
-
-# Print status
+# Step 8: Display completion message
 echo ""
-echo "=============================================="
-echo -e "${GREEN}🎉 Deployment Complete!${NC}"
-echo "=============================================="
+echo -e "${GREEN}"
+echo "============================================================"
+echo "       Deployment Complete!"
+echo "============================================================"
+echo -e "${NC}"
 echo ""
-echo "📍 Direct Access: http://$PUBLIC_IP"
-echo "🌐 Subdomain: https://workreport.k-innovative.com (after Cloudflare setup)"
-echo "📁 App Directory: $APP_DIR"
+echo "Application URL: http://$(hostname -I | awk '{print $1}'):3000"
+echo ""
+echo "Super Admin Credentials:"
+echo "  Employee ID: ADMIN001"
+echo "  Password:    admin123"
+echo ""
+echo -e "${YELLOW}⚠️  IMPORTANT: Change the admin password after first login!${NC}"
 echo ""
 echo "Useful commands:"
-echo "  cd $APP_DIR"
-echo "  docker-compose logs -f          # View logs"
-echo "  docker-compose restart          # Restart app"
-echo "  docker-compose down             # Stop app"
-echo "  docker-compose up -d --build    # Rebuild and start"
+echo "  View logs:     cd $INSTALL_DIR && docker compose logs -f"
+echo "  Restart:       cd $INSTALL_DIR && docker compose restart"
+echo "  Stop:          cd $INSTALL_DIR && docker compose down"
+echo "  Update:        cd $INSTALL_DIR && git pull && docker compose up -d --build"
 echo ""
-echo -e "${YELLOW}⚠️  Next Steps:${NC}"
-echo "  1. Go to Cloudflare DNS settings"
-echo "  2. Add A record: workreport -> $PUBLIC_IP (Proxied)"
-echo "  3. Set SSL/TLS to 'Full'"
+echo "JWT Secret (save this somewhere safe):"
+echo "  $JWT_SECRET"
 echo ""
-

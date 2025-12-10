@@ -21,9 +21,9 @@ export async function POST(request: NextRequest) {
     // Find employee by ID or email
     let employee = null;
     if (employeeId) {
-      employee = getEmployeeByEmployeeId(employeeId);
+      employee = await getEmployeeByEmployeeId(employeeId);
     } else if (email) {
-      employee = getEmployeeByEmail(email);
+      employee = await getEmployeeByEmail(email);
     }
 
     if (!employee) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
 
     // Store token
-    createPasswordResetToken(employee.employeeId, token, expiresAt);
+    await createPasswordResetToken(employee.employeeId, token, expiresAt);
 
     // Send password reset email
     const emailSent = await sendPasswordResetEmail(employee.email, token, employee.name);
@@ -97,7 +97,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Find token
-    const resetToken = getPasswordResetToken(token);
+    const resetToken = await getPasswordResetToken(token);
 
     if (!resetToken) {
       return NextResponse.json<ApiResponse>(
@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest) {
 
     // Check if token is expired
     if (new Date(resetToken.expiresAt) < new Date()) {
-      deletePasswordResetToken(token);
+      await deletePasswordResetToken(token);
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Reset token has expired' },
         { status: 400 }
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest) {
     const hashedPassword = await hashPassword(newPassword);
 
     // Update password
-    const updated = updateEmployeePassword(resetToken.employeeId, hashedPassword);
+    const updated = await updateEmployeePassword(resetToken.employeeId, hashedPassword);
 
     if (!updated) {
       return NextResponse.json<ApiResponse>(
@@ -129,7 +129,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Delete used token
-    deletePasswordResetToken(token);
+    await deletePasswordResetToken(token);
 
     return NextResponse.json<ApiResponse>({
       success: true,
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const resetToken = getPasswordResetToken(token);
+    const resetToken = await getPasswordResetToken(token);
 
     if (!resetToken) {
       return NextResponse.json<ApiResponse>(
@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (new Date(resetToken.expiresAt) < new Date()) {
-      deletePasswordResetToken(token);
+      await deletePasswordResetToken(token);
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Reset token has expired' },
         { status: 400 }
@@ -186,4 +186,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

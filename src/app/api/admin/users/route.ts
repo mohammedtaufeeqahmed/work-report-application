@@ -53,13 +53,13 @@ export async function GET(request: NextRequest) {
 
     // Super admin can see all users
     if (session.role === 'superadmin') {
-      rawEmployees = getAllEmployees() as unknown as Employee[];
+      rawEmployees = await getAllEmployees() as unknown as Employee[];
     } else {
       // Admin can only see users in their entity/branch
       if (session.branchId) {
-        rawEmployees = getEmployeesByBranch(session.branchId) as unknown as Employee[];
+        rawEmployees = await getEmployeesByBranch(session.branchId) as unknown as Employee[];
       } else if (session.entityId) {
-        rawEmployees = getEmployeesByEntity(session.entityId) as unknown as Employee[];
+        rawEmployees = await getEmployeesByEntity(session.entityId) as unknown as Employee[];
       } else {
         rawEmployees = [];
       }
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if employee ID already exists
-    const existingById = getEmployeeByEmployeeId(employeeId);
+    const existingById = await getEmployeeByEmployeeId(employeeId);
     if (existingById) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Employee ID already exists' },
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists
-    const existingByEmail = getEmployeeByEmail(email);
+    const existingByEmail = await getEmployeeByEmail(email);
     if (existingByEmail) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Email already exists' },
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     // Create user
     const userRole = role ?? 'employee';
-    const newEmployee = createEmployee({
+    const newEmployee = await createEmployee({
       employeeId,
       name,
       email,
@@ -180,4 +180,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

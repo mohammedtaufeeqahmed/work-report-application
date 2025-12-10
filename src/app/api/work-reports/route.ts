@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
     if (getDepartments === 'true' && canViewAll) {
       // For managers, only return their assigned departments
       const departments = isManager 
-        ? getUniqueWorkReportDepartmentsForManager(session.id)
-        : getUniqueWorkReportDepartments();
+        ? await getUniqueWorkReportDepartmentsForManager(session.id)
+        : await getUniqueWorkReportDepartments();
       return NextResponse.json<ApiResponse<{ departments: string[] }>>({
         success: true,
         data: { departments },
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     // For managers, filter by their assigned departments
     if (isManager) {
-      const managerDeptIds = getManagerDepartmentIds(session.id);
+      const managerDeptIds = await getManagerDepartmentIds(session.id);
       
       if (managerDeptIds.length === 0) {
         // Manager has no departments assigned, return empty
@@ -81,14 +81,14 @@ export async function GET(request: NextRequest) {
       }
       
       // Get department names for the manager
-      const allDepts = getAllDepartments();
+      const allDepts = await getAllDepartments();
       const managerDeptNames = allDepts
         .filter(d => managerDeptIds.includes(d.id))
         .map(d => d.name);
       
       // Search functionality for managers (filtered by their departments)
       if (search) {
-        reports = searchWorkReportsForManager(search, session.id, department || undefined);
+        reports = await searchWorkReportsForManager(search, session.id, department || undefined);
         // Apply date filter if provided
         if (startDate && endDate) {
           reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       } else if (department && department !== 'all') {
         // Filter by department only (if manager has access)
         if (managerDeptNames.includes(department)) {
-          reports = getWorkReportsByDepartmentForManager(department, session.id);
+          reports = await getWorkReportsByDepartmentForManager(department, session.id);
           // Apply date filter if provided
           if (startDate && endDate) {
             reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
         }
       } else if (employeeId) {
         // Filter by employee (but only if employee is in manager's departments)
-        const empReports = getWorkReportsByEmployee(employeeId);
+        const empReports = await getWorkReportsByEmployee(employeeId);
         reports = empReports.filter(r => managerDeptNames.includes(r.department));
         // Apply date filter if provided
         if (startDate && endDate) {
@@ -114,11 +114,11 @@ export async function GET(request: NextRequest) {
         }
       } else if (startDate && endDate) {
         // Filter by date range (filtered by manager's departments)
-        const dateReports = getWorkReportsByDateRange(startDate, endDate);
+        const dateReports = await getWorkReportsByDateRange(startDate, endDate);
         reports = dateReports.filter(r => managerDeptNames.includes(r.department));
       } else {
         // Get all reports from manager's departments (when "all" is selected or no filter)
-        const allReports = getWorkReports(limit, offset);
+        const allReports = await getWorkReports(limit, offset);
         reports = allReports.filter(r => managerDeptNames.includes(r.department));
         // Apply date filter if provided
         if (startDate && endDate) {
@@ -128,32 +128,32 @@ export async function GET(request: NextRequest) {
     } else {
       // Search functionality for admins/superadmins (no filtering)
       if (canViewAll && search) {
-        reports = searchWorkReports(search, department || undefined);
+        reports = await searchWorkReports(search, department || undefined);
       } else if (canViewAll && department && department !== 'all') {
         // Filter by department only
-        reports = getWorkReportsByDepartment(department);
+        reports = await getWorkReportsByDepartment(department);
       } else if (employeeId) {
         // Filter by employee
-        reports = getWorkReportsByEmployee(employeeId);
+        reports = await getWorkReportsByEmployee(employeeId);
       } else if (startDate && endDate) {
         // Filter by date range - only managers/admins can view all reports by date
         if (!canViewAll) {
           // For regular employees, filter by their own ID within the date range
-          reports = getWorkReportsByEmployee(session.employeeId);
+          reports = await getWorkReportsByEmployee(session.employeeId);
         } else {
-          reports = getWorkReportsByDateRange(startDate, endDate);
+          reports = await getWorkReportsByDateRange(startDate, endDate);
         }
       } else {
         // Get all reports - only managers/admins can view all, others get their own
         if (!canViewAll) {
-          reports = getWorkReportsByEmployee(session.employeeId);
+          reports = await getWorkReportsByEmployee(session.employeeId);
         } else {
-          reports = getWorkReports(limit, offset);
+          reports = await getWorkReports(limit, offset);
         }
       }
     }
 
-    const totalCount = canViewAll ? getWorkReportCount() : reports.length;
+    const totalCount = canViewAll ? await getWorkReportCount() : reports.length;
 
     return NextResponse.json<ApiResponse<{ reports: WorkReport[]; total: number }>>({
       success: true,
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate report (same employee, same date)
-    const existingReport = getWorkReportByEmployeeAndDate(employeeId, date);
+    const existingReport = await getWorkReportByEmployeeAndDate(employeeId, date);
     if (existingReport) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'A work report already exists for this employee on this date' },
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the work report
-    const newReport = createWorkReport({
+    const newReport = await createWorkReport({
       employeeId,
       date,
       name,
@@ -234,4 +234,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

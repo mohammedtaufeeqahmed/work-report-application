@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
     let branches: Branch[];
     
     if (entityId) {
-      branches = getBranchesByEntity(parseInt(entityId));
+      branches = await getBranchesByEntity(parseInt(entityId));
     } else {
-      branches = getAllBranches();
+      branches = await getAllBranches();
     }
 
     return NextResponse.json<ApiResponse<Branch[]>>({
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const branch = createBranch({ name: name.trim(), entityId });
+    const branch = await createBranch({ name: name.trim(), entityId });
 
     return NextResponse.json<ApiResponse<Branch>>({
       success: true,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create branch error:', error);
     // Check for unique constraint violation
-    if (error instanceof Error && error.message.includes('UNIQUE')) {
+    if (error instanceof Error && error.message.includes('unique')) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Branch with this name already exists in this entity' },
         { status: 409 }
@@ -90,4 +90,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

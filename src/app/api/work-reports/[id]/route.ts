@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWorkReportById, updateWorkReport, getEditPermissions, getManagerDepartments } from '@/lib/db/queries';
+import { getWorkReportById, updateWorkReport, getEditPermissions } from '@/lib/db/queries';
 import { getSession } from '@/lib/auth';
 import type { ApiResponse, WorkReport, UpdateWorkReportInput } from '@/types';
 import { getISTTodayDateString, convertUTCToISTDate } from '@/lib/date';
@@ -32,7 +32,7 @@ export async function GET(
       );
     }
 
-    const report = getWorkReportById(reportId);
+    const report = await getWorkReportById(reportId);
 
     if (!report) {
       return NextResponse.json<ApiResponse>(
@@ -91,7 +91,7 @@ export async function PUT(
       );
     }
 
-    const report = getWorkReportById(reportId);
+    const report = await getWorkReportById(reportId);
 
     if (!report) {
       return NextResponse.json<ApiResponse>(
@@ -101,7 +101,7 @@ export async function PUT(
     }
 
     // Get edit permissions from settings
-    const permissions = getEditPermissions();
+    const permissions = await getEditPermissions();
     
     // Check edit permissions based on role and settings
     const isOwnReport = report.employeeId === session.employeeId;
@@ -164,7 +164,7 @@ export async function PUT(
     }
 
     // Update the report
-    const updatedReport = updateWorkReport(reportId, newStatus, newWorkReport, newOnDuty);
+    const updatedReport = await updateWorkReport(reportId, newStatus, newWorkReport, newOnDuty);
 
     if (!updatedReport) {
       return NextResponse.json<ApiResponse>(
@@ -186,4 +186,3 @@ export async function PUT(
     );
   }
 }
-

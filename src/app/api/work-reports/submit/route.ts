@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if employee already submitted a report for this date
-    const existingReport = getWorkReportByEmployeeAndDate(employeeId, date);
+    const existingReport = await getWorkReportByEmployeeAndDate(employeeId, date);
     if (existingReport) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'You have already submitted a work report for today' },
@@ -110,4 +110,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

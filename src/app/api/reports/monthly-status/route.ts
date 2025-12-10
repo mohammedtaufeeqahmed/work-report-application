@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     const endDate = formatDateString(year, month, daysInMonth);
 
     // Get all employees
-    let employees: SafeEmployee[] = getAllEmployees();
+    let employees: SafeEmployee[] = await getAllEmployees();
 
     // Apply filters
     if (entityId && entityId !== 'all') {
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     employees = employees.filter(e => e.status === 'active');
 
     // Get all work reports for the month
-    const workReports: WorkReport[] = getWorkReportsByDateRange(startDate, endDate);
+    const workReports: WorkReport[] = await getWorkReportsByDateRange(startDate, endDate);
 
     // Create a map of employee reports by date
     const reportMap = new Map<string, WorkReport>();
@@ -159,9 +159,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Get filter options
-    const entities = getAllEntities();
-    const branches = getAllBranches();
-    const departments = getAllDepartments();
+    const entities = await getAllEntities();
+    const branches = await getAllBranches();
+    const departments = await getAllDepartments();
 
     return NextResponse.json<ApiResponse<MonthlyStatusResponse>>({
       success: true,
@@ -183,4 +183,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -7,7 +7,7 @@ export interface QueueItem {
   data: CreateWorkReportInput;
   timestamp: number;
   retries: number;
-  dbRetries: number; // Database lock retry counter
+  dbRetries: number; // Database retry counter
   status: 'pending' | 'processing' | 'completed' | 'failed';
   error?: string;
   result?: WorkReport;
@@ -28,17 +28,17 @@ export interface QueueStatus {
 
 // Configuration for the queue
 const QUEUE_CONFIG = {
-  // Delay between processing items (reduced for better throughput)
-  PROCESS_DELAY_MS: 10, // Was 100ms, now 10ms for 10x faster processing
+  // Delay between processing items
+  PROCESS_DELAY_MS: 10,
   
   // Max retries for general errors
   MAX_RETRIES: 3,
   
-  // Max retries for database lock errors (SQLITE_BUSY)
-  MAX_DB_LOCK_RETRIES: 5,
+  // Max retries for database errors
+  MAX_DB_RETRIES: 5,
   
-  // Base delay for database lock retry (exponential backoff)
-  DB_LOCK_RETRY_BASE_MS: 50,
+  // Base delay for database retry (exponential backoff)
+  DB_RETRY_BASE_MS: 50,
   
   // Max items to keep in history (to prevent memory leak)
   MAX_HISTORY_ITEMS: 1000,
@@ -48,40 +48,38 @@ const QUEUE_CONFIG = {
 };
 
 /**
- * Helper function to execute database operation with retry logic for locks
- * Uses exponential backoff for SQLITE_BUSY errors
+ * Helper function to execute database operation with retry logic
+ * Uses exponential backoff for transient errors
  */
 async function executeWithRetry<T>(
-  operation: () => T,
-  maxRetries: number = QUEUE_CONFIG.MAX_DB_LOCK_RETRIES,
-  baseDelayMs: number = QUEUE_CONFIG.DB_LOCK_RETRY_BASE_MS
+  operation: () => Promise<T>,
+  maxRetries: number = QUEUE_CONFIG.MAX_DB_RETRIES,
+  baseDelayMs: number = QUEUE_CONFIG.DB_RETRY_BASE_MS
 ): Promise<T> {
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return operation();
+      return await operation();
     } catch (error: unknown) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      // Check if it's a database lock error
-      const errorCode = (error as { code?: string })?.code;
+      // Check if it's a transient error worth retrying
       const errorMessage = lastError.message.toLowerCase();
-      const isLockError = 
-        errorCode === 'SQLITE_BUSY' || 
-        errorCode === 'SQLITE_LOCKED' ||
-        errorMessage.includes('database is locked') ||
-        errorMessage.includes('database is busy');
+      const isTransientError = 
+        errorMessage.includes('connection') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('too many clients');
       
-      if (isLockError && attempt < maxRetries - 1) {
+      if (isTransientError && attempt < maxRetries - 1) {
         // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
         const delay = baseDelayMs * Math.pow(2, attempt);
-        console.log(`[Queue] Database lock detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        console.log(`[Queue] Transient error detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
       
-      // For non-lock errors or max retries reached, throw immediately
+      // For non-transient errors or max retries reached, throw immediately
       throw lastError;
     }
   }
@@ -154,8 +152,8 @@ class WorkReportQueue extends EventEmitter {
       // Import dynamically to avoid circular dependencies
       const { createWorkReport, getWorkReportByEmployeeAndDate } = await import('@/lib/db/queries');
       
-      // Check for duplicate with retry logic for database locks
-      const existing = await executeWithRetry(() => 
+      // Check for duplicate with retry logic
+      const existing = await executeWithRetry(async () => 
         getWorkReportByEmployeeAndDate(item.data.employeeId, item.data.date)
       );
       
@@ -163,8 +161,8 @@ class WorkReportQueue extends EventEmitter {
         throw new Error('A work report already exists for this employee on this date');
       }
 
-      // Create work report in database with retry logic for database locks
-      const result = await executeWithRetry(() => createWorkReport(item.data));
+      // Create work report in database with retry logic
+      const result = await executeWithRetry(async () => createWorkReport(item.data));
       
       item.result = result;
       item.status = 'completed';
@@ -230,7 +228,6 @@ class WorkReportQueue extends EventEmitter {
       // Process next item if any
       const pendingCount = this.queue.filter(i => i.status === 'pending').length;
       if (pendingCount > 0) {
-        // Reduced delay for faster throughput (10ms instead of 100ms)
         setTimeout(() => this.processNext(), QUEUE_CONFIG.PROCESS_DELAY_MS);
       }
     }

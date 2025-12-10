@@ -37,7 +37,7 @@ export async function GET(
       );
     }
 
-    const department = getDepartmentById(departmentId);
+    const department = await getDepartmentById(departmentId);
 
     if (!department) {
       return NextResponse.json<ApiResponse>(
@@ -84,7 +84,7 @@ export async function PATCH(
       );
     }
 
-    const existing = getDepartmentById(departmentId);
+    const existing = await getDepartmentById(departmentId);
     if (!existing) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Department not found' },
@@ -103,7 +103,7 @@ export async function PATCH(
     }
 
     // Check if new name already exists (excluding current department)
-    const nameExists = getDepartmentByName(name.trim());
+    const nameExists = await getDepartmentByName(name.trim());
     if (nameExists && nameExists.id !== departmentId) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Department name already exists' },
@@ -111,7 +111,7 @@ export async function PATCH(
       );
     }
 
-    const department = updateDepartment(departmentId, name.trim());
+    const department = await updateDepartment(departmentId, name.trim());
 
     return NextResponse.json<ApiResponse<Department>>({
       success: true,
@@ -152,7 +152,7 @@ export async function DELETE(
       );
     }
 
-    const existing = getDepartmentById(departmentId);
+    const existing = await getDepartmentById(departmentId);
     if (!existing) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Department not found' },
@@ -160,7 +160,7 @@ export async function DELETE(
       );
     }
 
-    deleteDepartment(departmentId);
+    await deleteDepartment(departmentId);
 
     return NextResponse.json<ApiResponse>({
       success: true,
@@ -174,4 +174,3 @@ export async function DELETE(
     );
   }
 }
-

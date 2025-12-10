@@ -22,7 +22,7 @@ export async function GET() {
       );
     }
 
-    const permissions = getEditPermissions();
+    const permissions = await getEditPermissions();
 
     return NextResponse.json<ApiResponse<EditPermissions>>({
       success: true,
@@ -57,7 +57,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body: Partial<EditPermissions> = await request.json();
-    const updatedPermissions = updateEditPermissions(body);
+    const updatedPermissions = await updateEditPermissions(body);
 
     return NextResponse.json<ApiResponse<EditPermissions>>({
       success: true,
@@ -72,4 +72,3 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
-

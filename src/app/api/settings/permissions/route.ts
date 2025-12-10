@@ -14,7 +14,7 @@ export async function GET() {
       );
     }
 
-    const permissions = getEditPermissions();
+    const permissions = await getEditPermissions();
 
     // Return permissions relevant to the user's role
     return NextResponse.json<ApiResponse<EditPermissions>>({
@@ -29,4 +29,3 @@ export async function GET() {
     );
   }
 }
-

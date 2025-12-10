@@ -3,7 +3,6 @@ import { getSession } from '@/lib/auth';
 import { 
   getAllDepartments, 
   createDepartment, 
-  getDepartmentByName 
 } from '@/lib/db/queries';
 import type { ApiResponse, Department, CreateDepartmentInput } from '@/types';
 
@@ -19,7 +18,7 @@ export async function GET() {
       );
     }
 
-    const departments = getAllDepartments();
+    const departments = await getAllDepartments();
 
     return NextResponse.json<ApiResponse<Department[]>>({
       success: true,
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if department already exists in this entity
-    const allDepartments = getAllDepartments();
+    const allDepartments = await getAllDepartments();
     const existing = allDepartments.find(
       d => d.name.toLowerCase() === name.trim().toLowerCase() && d.entityId === entityId
     );
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const department = createDepartment({ name: name.trim(), entityId });
+    const department = await createDepartment({ name: name.trim(), entityId });
 
     return NextResponse.json<ApiResponse<Department>>({
       success: true,
@@ -90,4 +89,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

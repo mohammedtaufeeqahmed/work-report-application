@@ -36,7 +36,7 @@ export async function GET(
       );
     }
 
-    const employee = getEmployeeById(managerId);
+    const employee = await getEmployeeById(managerId);
     if (!employee) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'User not found' },
@@ -51,7 +51,7 @@ export async function GET(
       );
     }
 
-    const departments = getManagerDepartments(managerId);
+    const departments = await getManagerDepartments(managerId);
 
     return NextResponse.json<ApiResponse<Department[]>>({
       success: true,
@@ -91,7 +91,7 @@ export async function PUT(
       );
     }
 
-    const employee = getEmployeeById(managerId);
+    const employee = await getEmployeeById(managerId);
     if (!employee) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'User not found' },
@@ -116,9 +116,9 @@ export async function PUT(
       );
     }
 
-    setManagerDepartments(managerId, departmentIds);
+    await setManagerDepartments(managerId, departmentIds);
 
-    const departments = getManagerDepartments(managerId);
+    const departments = await getManagerDepartments(managerId);
 
     return NextResponse.json<ApiResponse<Department[]>>({
       success: true,
@@ -133,5 +133,3 @@ export async function PUT(
     );
   }
 }
-
-

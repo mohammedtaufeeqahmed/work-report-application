@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getDatabase } from '@/lib/db/database';
+import { pool, initializeDatabase } from '@/lib/db/database';
 import type { ApiResponse } from '@/types';
 
 // POST: Run database migrations (superadmin only)
@@ -15,57 +15,12 @@ export async function POST() {
       );
     }
 
-    const db = getDatabase();
-    const migrations: string[] = [];
+    // Initialize/update database schema
+    await initializeDatabase();
 
-    // Check and create departments table
-    const deptTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='departments'").get();
-    if (!deptTableExists) {
-      db.exec(`
-        CREATE TABLE departments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT UNIQUE NOT NULL,
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      migrations.push('Created departments table');
-    }
-
-    // Check and create manager_departments table
-    const mgrDeptTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='manager_departments'").get();
-    if (!mgrDeptTableExists) {
-      db.exec(`
-        CREATE TABLE manager_departments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          managerId INTEGER NOT NULL,
-          departmentId INTEGER NOT NULL,
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(managerId, departmentId),
-          FOREIGN KEY (managerId) REFERENCES employees(id) ON DELETE CASCADE,
-          FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE CASCADE
-        )
-      `);
-      db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_manager_departments_managerId ON manager_departments(managerId);
-        CREATE INDEX IF NOT EXISTS idx_manager_departments_departmentId ON manager_departments(departmentId);
-      `);
-      migrations.push('Created manager_departments table');
-    }
-
-    // Update employees table role constraint to include 'manager' if needed
-    // SQLite doesn't support ALTER CHECK constraint, so we'll skip this for existing databases
-
-    if (migrations.length === 0) {
-      return NextResponse.json<ApiResponse>({
-        success: true,
-        message: 'Database is already up to date',
-      });
-    }
-
-    return NextResponse.json<ApiResponse<string[]>>({
+    return NextResponse.json<ApiResponse>({
       success: true,
-      data: migrations,
-      message: `Migrations completed: ${migrations.join(', ')}`,
+      message: 'Database migrations completed successfully',
     });
   } catch (error) {
     console.error('Migration error:', error);
@@ -88,10 +43,14 @@ export async function GET() {
       );
     }
 
-    const db = getDatabase();
+    // Check which tables exist in PostgreSQL
+    const result = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
     
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-    const tableNames = tables.map(t => t.name);
+    const tableNames = result.rows.map((row: { table_name: string }) => row.table_name);
 
     const status = {
       departments: tableNames.includes('departments'),
@@ -99,7 +58,10 @@ export async function GET() {
       entities: tableNames.includes('entities'),
       branches: tableNames.includes('branches'),
       employees: tableNames.includes('employees'),
-      workReports: tableNames.includes('workReports'),
+      work_reports: tableNames.includes('work_reports'),
+      settings: tableNames.includes('settings'),
+      password_reset_tokens: tableNames.includes('password_reset_tokens'),
+      otp_tokens: tableNames.includes('otp_tokens'),
     };
 
     return NextResponse.json<ApiResponse>({
@@ -114,5 +76,3 @@ export async function GET() {
     );
   }
 }
-
-

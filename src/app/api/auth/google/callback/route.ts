@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Look up user in database by email
-    const employee = getEmployeeByEmail(googleUser.email);
+    const employee = await getEmployeeByEmail(googleUser.email);
     
     if (!employee) {
       return NextResponse.redirect(

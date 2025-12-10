@@ -33,7 +33,7 @@ export async function GET() {
       );
     }
 
-    const employee = getEmployeeByEmployeeId(session.employeeId);
+    const employee = await getEmployeeByEmployeeId(session.employeeId);
     if (!employee) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'User not found' },
@@ -46,21 +46,21 @@ export async function GET() {
     let branch = null;
     
     if (employee.entityId) {
-      const entityData = getEntityById(employee.entityId);
+      const entityData = await getEntityById(employee.entityId);
       if (entityData) {
         entity = { id: entityData.id, name: entityData.name };
       }
     }
     
     if (employee.branchId) {
-      const branchData = getBranchById(employee.branchId);
+      const branchData = await getBranchById(employee.branchId);
       if (branchData) {
         branch = { id: branchData.id, name: branchData.name };
       }
     }
 
     // Get managers for this department
-    const managers = getManagersForDepartment(employee.department);
+    const managers = await getManagersForDepartment(employee.department);
 
     const profileData: ProfileData = {
       id: employee.id,
@@ -93,4 +93,3 @@ export async function GET() {
     );
   }
 }
-

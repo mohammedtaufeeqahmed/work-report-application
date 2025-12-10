@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getDatabase } from '@/lib/db/database';
+import { pool } from '@/lib/db/database';
 
 // Temporary reset key - remove after use
 const RESET_KEY = 'RESET_ALL_DATA_2024';
@@ -21,42 +21,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDatabase();
-    
     // Get the super admin user ID to preserve it
-    const superAdmin = db.prepare(
+    const superAdminResult = await pool.query(
       "SELECT id FROM employees WHERE role = 'superadmin' LIMIT 1"
-    ).get() as { id: number } | undefined;
+    );
 
-    if (!superAdmin) {
+    if (superAdminResult.rows.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Super admin not found' },
         { status: 400 }
       );
     }
 
+    const superAdminId = superAdminResult.rows[0].id;
+
     // Delete in order to respect foreign key constraints
     
     // 1. Delete all work reports
-    try { db.prepare('DELETE FROM workReports').run(); } catch { /* table may not exist */ }
+    await pool.query('DELETE FROM work_reports');
     
-    // 2. Delete all leave records (if exists)
-    try { db.prepare('DELETE FROM leaveRecords').run(); } catch { /* table may not exist */ }
+    // 2. Delete all manager_departments mappings
+    await pool.query('DELETE FROM manager_departments');
     
-    // 3. Delete all manager_departments mappings
-    try { db.prepare('DELETE FROM manager_departments').run(); } catch { /* table may not exist */ }
+    // 3. Delete all OTP tokens
+    await pool.query('DELETE FROM otp_tokens');
     
-    // 4. Delete all users except super admin
-    db.prepare('DELETE FROM employees WHERE id != ?').run(superAdmin.id);
+    // 4. Delete all password reset tokens
+    await pool.query('DELETE FROM password_reset_tokens');
     
-    // 5. Delete all departments
-    db.prepare('DELETE FROM departments').run();
+    // 5. Delete all users except super admin
+    await pool.query('DELETE FROM employees WHERE id != $1', [superAdminId]);
     
-    // 6. Delete all branches
-    db.prepare('DELETE FROM branches').run();
+    // 6. Delete all departments
+    await pool.query('DELETE FROM departments');
     
-    // 7. Delete all entities
-    db.prepare('DELETE FROM entities').run();
+    // 7. Delete all branches
+    await pool.query('DELETE FROM branches');
+    
+    // 8. Delete all entities
+    await pool.query('DELETE FROM entities');
 
     return NextResponse.json({
       success: true,
@@ -79,4 +82,3 @@ export async function GET() {
     message: 'Use POST request to reset the database. Warning: This will delete all data except super admin!',
   });
 }
-

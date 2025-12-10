@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if employee ID already exists
-        const existingById = getEmployeeByEmployeeId(user.employeeId);
+        const existingById = await getEmployeeByEmployeeId(user.employeeId);
         if (existingById) {
           result.failed++;
           result.errors.push({
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if email already exists
-        const existingByEmail = getEmployeeByEmail(user.email);
+        const existingByEmail = await getEmployeeByEmail(user.email);
         if (existingByEmail) {
           result.failed++;
           result.errors.push({
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         const hashedPassword = await hashPassword(user.password);
 
         // Create user
-        createEmployee({
+        await createEmployee({
           employeeId: user.employeeId,
           name: user.name,
           email: user.email,
@@ -141,4 +141,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

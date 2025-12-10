@@ -27,7 +27,7 @@ export async function GET(
 
     if (fullData) {
       // Return full employee data (without password)
-      const employee = getSafeEmployeeByEmployeeId(employeeId);
+      const employee = await getSafeEmployeeByEmployeeId(employeeId);
       
       if (!employee) {
         return NextResponse.json<ApiResponse>(
@@ -42,7 +42,7 @@ export async function GET(
       });
     } else {
       // Return only lookup data (for work report form)
-      const employee = getEmployeeLookup(employeeId);
+      const employee = await getEmployeeLookup(employeeId);
       
       if (!employee) {
         return NextResponse.json<ApiResponse>(
@@ -53,7 +53,7 @@ export async function GET(
 
       // Check if employee already submitted a report for today (IST)
       const today = getISTTodayDateString();
-      const existingReport = getWorkReportByEmployeeAndDate(employeeId, today);
+      const existingReport = await getWorkReportByEmployeeAndDate(employeeId, today);
 
       return NextResponse.json<ApiResponse<EmployeeLookup & { hasSubmittedToday: boolean }>>({
         success: true,
@@ -71,4 +71,3 @@ export async function GET(
     );
   }
 }
-

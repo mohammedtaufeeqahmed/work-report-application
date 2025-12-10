@@ -7,36 +7,27 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    volumes:
-      - ./data:/app/data
     environment:
       - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
-      # SMTP Configuration
+      # Required: JWT Secret for session tokens
+      - JWT_SECRET=${JWT_SECRET}
+      # Required: PostgreSQL Database URL
+      - DATABASE_URL=${DATABASE_URL:-postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport}
+      # Optional: SMTP Configuration (for password reset emails)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-WorkReport}
-      # Google OAuth Configuration
+      # Optional: Google OAuth Configuration
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_ALLOWED_DOMAINS=${GOOGLE_ALLOWED_DOMAINS:-}
+      # Application URL
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - work-report-app

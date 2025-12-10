@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const employee = getEmployeeByEmployeeId(session.employeeId);
+    const employee = await getEmployeeByEmployeeId(session.employeeId);
     if (!employee) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'User not found' },
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify OTP
-    const otpToken = getOTPToken(employee.employeeId, otp);
+    const otpToken = await getOTPToken(employee.employeeId, otp);
     
     if (!otpToken) {
       return NextResponse.json<ApiResponse>(
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     // Check if OTP is expired
     if (new Date(otpToken.expiresAt) < new Date()) {
-      deleteOTPTokensForEmployee(employee.employeeId);
+      await deleteOTPTokensForEmployee(employee.employeeId);
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'OTP has expired. Please request a new one.' },
         { status: 400 }
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(newPassword);
 
     // Update password
-    const updated = updateEmployeePassword(employee.employeeId, hashedPassword);
+    const updated = await updateEmployeePassword(employee.employeeId, hashedPassword);
 
     if (!updated) {
       return NextResponse.json<ApiResponse>(
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Delete used OTP tokens
-    deleteOTPTokensForEmployee(employee.employeeId);
+    await deleteOTPTokensForEmployee(employee.employeeId);
 
     // Clear the session to force re-login with new password
     await clearSession();
@@ -102,4 +102,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

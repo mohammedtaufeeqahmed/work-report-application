@@ -93,7 +93,7 @@ export async function authenticateUser(credentials: LoginCredentials): Promise<{
   const { employeeId, password } = credentials;
 
   // Get employee from database
-  const employee = getEmployeeByEmployeeId(employeeId);
+  const employee = await getEmployeeByEmployeeId(employeeId);
   
   if (!employee) {
     return { success: false, error: 'Invalid employee ID or password' };
@@ -222,4 +222,3 @@ export function employeeToSessionUser(employee: Employee): SessionUser {
     pageAccess,
   };
 }
-

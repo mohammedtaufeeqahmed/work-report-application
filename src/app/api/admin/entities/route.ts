@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, isSuperAdmin } from '@/lib/auth';
-import { getAllEntities, createEntity, getEntityById } from '@/lib/db/queries';
+import { getAllEntities, createEntity } from '@/lib/db/queries';
 import type { ApiResponse, Entity, CreateEntityInput } from '@/types';
 
 // GET: Get all entities
@@ -15,7 +15,7 @@ export async function GET() {
       );
     }
 
-    const entities = getAllEntities();
+    const entities = await getAllEntities();
 
     return NextResponse.json<ApiResponse<Entity[]>>({
       success: true,
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const entity = createEntity({ name: name.trim() });
+    const entity = await createEntity({ name: name.trim() });
 
     return NextResponse.json<ApiResponse<Entity>>({
       success: true,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Create entity error:', error);
     // Check for unique constraint violation
-    if (error instanceof Error && error.message.includes('UNIQUE')) {
+    if (error instanceof Error && error.message.includes('unique')) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'Entity with this name already exists' },
         { status: 409 }
@@ -74,4 +74,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

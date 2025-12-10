@@ -14,13 +14,10 @@ export interface DatabaseStatsResponse {
     responseTimeMs: number;
     error?: string;
     stats: {
-      pageCount: number;
-      pageSize: number;
-      cacheSize: number;
-      freelistCount: number;
-      walMode: string;
-      dbSizeBytes: number;
-      dbSizeMB: string;
+      poolSize: number;
+      poolIdleCount: number;
+      poolWaitingCount: number;
+      databaseName: string;
     } | null;
   };
   queue: {
@@ -58,8 +55,8 @@ export interface DatabaseStatsResponse {
 export async function GET() {
   try {
     // Database health check
-    const health = healthCheck();
-    const connected = isDatabaseConnected();
+    const health = await healthCheck();
+    const connected = await isDatabaseConnected();
     
     // Get database stats (only if healthy)
     let dbStats = null;
@@ -126,4 +123,3 @@ export async function GET() {
     }, { status: 500 });
   }
 }
-

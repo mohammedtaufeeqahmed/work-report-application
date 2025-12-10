@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { initializeSchema, seedInitialData } from '@/lib/db/schema';
+import { initializeDatabase, seedInitialData } from '@/lib/db/database';
 
 export async function POST() {
   try {
     // Initialize database schema
-    initializeSchema();
+    await initializeDatabase();
     
     // Seed initial data (creates super admin if no data exists)
     await seedInitialData();
@@ -30,4 +30,3 @@ export async function GET() {
     message: 'Use POST request to initialize the database',
   });
 }
-

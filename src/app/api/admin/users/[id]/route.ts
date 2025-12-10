@@ -59,7 +59,7 @@ export async function GET(
       );
     }
 
-    const employee = getEmployeeById(userId);
+    const employee = await getEmployeeById(userId);
 
     if (!employee) {
       return NextResponse.json<ApiResponse>(
@@ -119,7 +119,7 @@ export async function PATCH(
       );
     }
 
-    const employee = getEmployeeById(userId);
+    const employee = await getEmployeeById(userId);
 
     if (!employee) {
       return NextResponse.json<ApiResponse>(
@@ -161,7 +161,7 @@ export async function PATCH(
       body.password = await hashPassword(body.password);
     }
 
-    const updatedEmployee = updateEmployee(userId, body);
+    const updatedEmployee = await updateEmployee(userId, body);
 
     if (!updatedEmployee) {
       return NextResponse.json<ApiResponse>(
@@ -220,7 +220,7 @@ export async function DELETE(
       );
     }
 
-    const success = deleteEmployee(userId);
+    const success = await deleteEmployee(userId);
 
     if (!success) {
       return NextResponse.json<ApiResponse>(
@@ -241,4 +241,3 @@ export async function DELETE(
     );
   }
 }
-
