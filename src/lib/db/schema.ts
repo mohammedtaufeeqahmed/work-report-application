@@ -140,7 +140,7 @@ export const workReports = pgTable('work_reports', {
   name: text('name').notNull(),
   email: text('email').notNull(),
   department: text('department').notNull(),
-  status: text('status', { enum: ['working', 'leave'] }).notNull(),
+  status: text('status', { enum: ['working', 'leave', 'absent'] }).notNull(),
   workReport: text('work_report'),
   onDuty: boolean('on_duty').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

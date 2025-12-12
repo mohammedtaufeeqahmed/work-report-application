@@ -246,6 +246,9 @@ export default function SuperAdminPage() {
       if (userFormData.role === 'manager' && userFormData.departmentIds.length > 0) {
         // For managers, use first selected department as primary
         primaryDepartment = departments.find(d => d.id === userFormData.departmentIds[0])?.name || userFormData.department;
+      } else if (userFormData.department === 'Operations' && userFormData.departmentIds.length > 0) {
+        // For Operations users, use first selected department as primary (but keep Operations as department)
+        primaryDepartment = 'Operations';
       } else if (userFormData.role === 'boardmember') {
         // Board members have access across all - set department as "Board"
         primaryDepartment = 'Board';
@@ -257,8 +260,8 @@ export default function SuperAdminPage() {
         primaryDepartment = 'Super Admin';
       }
 
-      // Only send pageAccess for non-employee roles
-      const pageAccessToSend = userFormData.role !== 'employee' ? userPageAccess : null;
+      // Send pageAccess for all roles (employees can have mark_attendance permission)
+      const pageAccessToSend = userPageAccess;
 
       const response = await fetch('/api/admin/users', {
         method: 'POST',
@@ -275,8 +278,8 @@ export default function SuperAdminPage() {
       const data = await response.json();
 
       if (data.success) {
-        // If manager, set their departments
-        if (userFormData.role === 'manager' && userFormData.departmentIds.length > 0) {
+        // If manager or Operations user, set their departments
+        if ((userFormData.role === 'manager' || userFormData.department === 'Operations') && userFormData.departmentIds.length > 0) {
           await fetch(`/api/admin/users/${data.data.id}/departments`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -372,8 +375,8 @@ export default function SuperAdminPage() {
     // Set page access from user or defaults
     setEditPageAccess(user.pageAccess || DEFAULT_PAGE_ACCESS[user.role]);
 
-    // If user is a manager, fetch their departments
-    if (user.role === 'manager') {
+    // If user is a manager or Operations department, fetch their departments
+    if (user.role === 'manager' || user.department === 'Operations') {
       try {
         const res = await fetch(`/api/admin/users/${user.id}/departments`);
         const data = await res.json();
@@ -384,7 +387,7 @@ export default function SuperAdminPage() {
           }));
         }
       } catch (error) {
-        console.error('Failed to fetch manager departments:', error);
+        console.error('Failed to fetch user departments:', error);
       }
     }
 
@@ -410,15 +413,18 @@ export default function SuperAdminPage() {
       if (editFormData.role !== editingUser.role) updatePayload.role = editFormData.role;
       if (editFormData.status !== editingUser.status) updatePayload.status = editFormData.status;
 
-      // For non-employee roles, include page access
-      if (editFormData.role !== 'employee') {
-        updatePayload.pageAccess = editPageAccess;
-      }
+      // Include page access for all roles (employees can have mark_attendance permission)
+      updatePayload.pageAccess = editPageAccess;
 
       // For manager, update department to primary selected
       if (editFormData.role === 'manager' && editFormData.departmentIds.length > 0) {
         const primaryDept = departments.find(d => d.id === editFormData.departmentIds[0]);
         if (primaryDept) updatePayload.department = primaryDept.name;
+      }
+      
+      // For Operations users, keep Operations as department
+      if (editFormData.department === 'Operations') {
+        updatePayload.department = 'Operations';
       }
 
       // For board members, set department to "Board" and clear entity/branch
@@ -437,8 +443,8 @@ export default function SuperAdminPage() {
       const data = await response.json();
 
       if (data.success) {
-        // If manager, update their departments
-        if (editFormData.role === 'manager' && editFormData.departmentIds.length > 0) {
+        // If manager or Operations user, update their departments
+        if ((editFormData.role === 'manager' || editFormData.department === 'Operations') && editFormData.departmentIds.length > 0) {
           await fetch(`/api/admin/users/${editingUser.id}/departments`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -1283,11 +1289,19 @@ export default function SuperAdminPage() {
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={userFormData.department}
-                      onChange={(e) => setUserFormData({ ...userFormData, department: e.target.value })}
+                      onChange={(e) => {
+                        setUserFormData({ 
+                          ...userFormData, 
+                          department: e.target.value,
+                          // Clear departmentIds when changing department (unless selecting Operations)
+                          departmentIds: e.target.value === 'Operations' ? userFormData.departmentIds : []
+                        });
+                      }}
                       required
                       disabled={!userFormData.entityId}
                     >
                       <option value="">{userFormData.entityId ? 'Select Department' : 'Select Entity first'}</option>
+                      <option value="Operations">Operations</option>
                       {departments
                         .filter(d => d.entityId === userFormData.entityId)
                         .map((dept) => (
@@ -1357,9 +1371,50 @@ export default function SuperAdminPage() {
                   </div>
                 )}
 
-                {/* Page Access - For manager, admin, superadmin, boardmember */}
-                {(userFormData.role === 'manager' || userFormData.role === 'admin' || userFormData.role === 'superadmin' || userFormData.role === 'boardmember') && (
-                  <div className="space-y-3 md:col-span-2">
+                {/* Departments - Multi select for Operations department users */}
+                {userFormData.department === 'Operations' && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Departments * (Select multiple - employees from these departments can be marked absent)</Label>
+                    <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                      {!userFormData.entityId ? (
+                        <p className="text-sm text-muted-foreground">Select an entity first to see available departments.</p>
+                      ) : departments.filter(d => d.entityId === userFormData.entityId).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No departments available for this entity. Create departments first.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {departments
+                            .filter(d => d.entityId === userFormData.entityId)
+                            .map((dept) => (
+                              <label
+                                key={dept.id}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                  userFormData.departmentIds.includes(dept.id)
+                                    ? 'bg-primary/10 border border-primary'
+                                    : 'bg-muted/50 hover:bg-muted'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={userFormData.departmentIds.includes(dept.id)}
+                                  onChange={() => handleDepartmentToggle(dept.id)}
+                                  className="rounded"
+                                />
+                                <span className="text-sm">{dept.name}</span>
+                              </label>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                    {userFormData.departmentIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Selected: {userFormData.departmentIds.map(id => departments.find(d => d.id === id)?.name).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Page Access - Available for all roles */}
+                <div className="space-y-3 md:col-span-2">
                     <Label className="text-sm font-medium">Page Access Permissions</Label>
                     <div className="border rounded-lg p-4 bg-muted/30">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1417,10 +1472,18 @@ export default function SuperAdminPage() {
                           />
                           <span className="text-sm">Super Admin Dashboard</span>
                         </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={userPageAccess.mark_attendance}
+                            onChange={(e) => setUserPageAccess({ ...userPageAccess, mark_attendance: e.target.checked })}
+                            className="rounded"
+                          />
+                          <span className="text-sm">Mark Attendance</span>
+                        </label>
                       </div>
                     </div>
                   </div>
-                )}
 
                 {/* Entity and Branch - Not for board members */}
                 {userFormData.role !== 'boardmember' && (
@@ -1800,11 +1863,19 @@ export default function SuperAdminPage() {
                       <select
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         value={editFormData.department}
-                        onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                        onChange={(e) => {
+                          setEditFormData({ 
+                            ...editFormData, 
+                            department: e.target.value,
+                            // Clear departmentIds when changing department (unless selecting Operations)
+                            departmentIds: e.target.value === 'Operations' ? editFormData.departmentIds : []
+                          });
+                        }}
                         required
                         disabled={!editFormData.entityId}
                       >
                         <option value="">{editFormData.entityId ? 'Select Department' : 'Select Entity first'}</option>
+                        <option value="Operations">Operations</option>
                         {departments
                           .filter(d => d.entityId === editFormData.entityId)
                           .map((dept) => (
@@ -1869,9 +1940,8 @@ export default function SuperAdminPage() {
                     </div>
                   )}
 
-                  {/* Page Access - For manager, admin, superadmin, boardmember */}
-                  {(editFormData.role === 'manager' || editFormData.role === 'admin' || editFormData.role === 'superadmin' || editFormData.role === 'boardmember') && (
-                    <div className="space-y-3 md:col-span-2">
+                  {/* Page Access - Available for all roles */}
+                  <div className="space-y-3 md:col-span-2">
                       <Label className="text-sm font-medium">Page Access Permissions</Label>
                       <div className="border rounded-lg p-4 bg-muted/30">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1929,10 +1999,18 @@ export default function SuperAdminPage() {
                             />
                             <span className="text-sm">Super Admin Dashboard</span>
                           </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editPageAccess.mark_attendance}
+                              onChange={(e) => setEditPageAccess({ ...editPageAccess, mark_attendance: e.target.checked })}
+                              className="rounded"
+                            />
+                            <span className="text-sm">Mark Attendance</span>
+                          </label>
                         </div>
                       </div>
                     </div>
-                  )}
 
                   {/* Entity and Branch - Not for board members */}
                   {editFormData.role !== 'boardmember' && (

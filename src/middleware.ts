@@ -24,6 +24,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: false,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: false,
   },
   manager: {
     dashboard: true,
@@ -32,6 +33,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: true,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: true,
   },
   boardmember: {
     dashboard: true,
@@ -40,6 +42,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: true,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: false,
   },
   admin: {
     dashboard: true,
@@ -48,6 +51,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: false,
     admin_dashboard: true,
     super_admin_dashboard: false,
+    mark_attendance: false,
   },
   superadmin: {
     dashboard: true,
@@ -56,6 +60,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: true,
     admin_dashboard: true,
     super_admin_dashboard: true,
+    mark_attendance: false,
   },
 };
 

@@ -190,9 +190,13 @@ export default function EmployeeDashboardPage() {
   const today = getISTTodayDateString();
   const todayReport = reports.find(r => r.date === today);
   
-  // Helper function to check if report is a late submission (using IST)
-  const isLateSubmission = (reportDate: string) => {
-    return reportDate < today;
+  // Helper function to check if report is a late submission
+  // A report is "late" if the report date is before the date when it was submitted
+  const isLateSubmission = (report: WorkReport) => {
+    // Extract the date from createdAt (when the report was submitted)
+    const submissionDate = convertUTCToISTDate(report.createdAt);
+    // Compare report date with submission date
+    return report.date < submissionDate;
   };
 
   // Show loading while checking session
@@ -415,7 +419,7 @@ export default function EmployeeDashboardPage() {
                         )}
                         
                         {/* Late Submission Badge */}
-                        {isLateSubmission(report.date) && (
+                        {isLateSubmission(report) && (
                           <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 flex-shrink-0">
                             <AlertCircle className="h-3 w-3" />
                             Late Submitted

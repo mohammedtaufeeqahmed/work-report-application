@@ -240,6 +240,46 @@ export async function getEmployeesByBranch(branchId: number): Promise<SafeEmploy
 }
 
 /**
+ * Get team employees for a manager (employees in departments managed by the manager)
+ */
+export async function getTeamEmployeesForManager(managerId: number): Promise<SafeEmployee[]> {
+  // Get department IDs managed by this manager
+  const departmentIds = await getManagerDepartmentIds(managerId);
+  
+  if (departmentIds.length === 0) {
+    return [];
+  }
+
+  // Get department names from IDs
+  const deptResults = await db
+    .select({ name: departments.name })
+    .from(departments)
+    .where(inArray(departments.id, departmentIds));
+  
+  const departmentNames = deptResults.map((d) => d.name);
+  
+  if (departmentNames.length === 0) {
+    return [];
+  }
+
+  // Get employees in those departments
+  const results = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        inArray(employees.department, departmentNames),
+        eq(employees.status, 'active'),
+        // Exclude the manager themselves
+        sql`${employees.id} != ${managerId}`
+      )
+    )
+    .orderBy(employees.name);
+  
+  return results.map(toSafeEmployee);
+}
+
+/**
  * Create a new employee
  */
 export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeType> {

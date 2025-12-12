@@ -15,7 +15,7 @@ interface EmployeeReportStatus {
   department: string;
   entityId: number | null;
   branchId: number | null;
-  dailyStatus: Record<string, 'submitted' | 'leave' | 'not_submitted' | 'sunday' | 'future'>;
+  dailyStatus: Record<string, 'submitted' | 'leave' | 'absent' | 'not_submitted' | 'sunday' | 'future'>;
   submittedCount: number;
   workingDaysCount: number;
 }
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
 
     // Build employee status data
     const employeeStatuses: EmployeeReportStatus[] = employees.map(employee => {
-      const dailyStatus: Record<string, 'submitted' | 'leave' | 'not_submitted' | 'sunday' | 'future'> = {};
+      const dailyStatus: Record<string, 'submitted' | 'leave' | 'absent' | 'not_submitted' | 'sunday' | 'future'> = {};
       let submittedCount = 0;
       let workingDaysCount = 0;
 
@@ -126,7 +126,8 @@ export async function GET(request: NextRequest) {
           const report = reportMap.get(key);
           
           if (report) {
-            if (report.status === 'leave') {
+            if (report.status === 'leave' || report.status === 'absent') {
+              // Treat absent as leave
               dailyStatus[dateStr] = 'leave';
               submittedCount++; // Leave counts as submitted
             } else {

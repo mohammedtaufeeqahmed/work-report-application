@@ -5,7 +5,7 @@ export type UserRole = 'employee' | 'manager' | 'admin' | 'superadmin' | 'boardm
 export type UserStatus = 'active' | 'inactive';
 
 // Work report status
-export type WorkStatus = 'working' | 'leave';
+export type WorkStatus = 'working' | 'leave' | 'absent';
 
 // Entity type
 export interface Entity {
@@ -211,6 +211,7 @@ export interface PageAccess {
   management_dashboard: boolean;
   admin_dashboard: boolean;
   super_admin_dashboard: boolean;
+  mark_attendance: boolean; // Permission to mark employees as absent
 }
 
 // Default page access by role
@@ -222,6 +223,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: false,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: false,
   },
   manager: {
     dashboard: true,
@@ -230,6 +232,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: true,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: true, // Managers can mark attendance by default
   },
   boardmember: {
     dashboard: true,
@@ -238,6 +241,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: true,
     admin_dashboard: false,
     super_admin_dashboard: false,
+    mark_attendance: false,
   },
   admin: {
     dashboard: true,
@@ -246,6 +250,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: false,  // Not by default, can be granted by super admin
     admin_dashboard: true,
     super_admin_dashboard: false,
+    mark_attendance: false,  // Not by default, can be granted by super admin
   },
   superadmin: {
     dashboard: true,
@@ -254,6 +259,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     management_dashboard: false,  // Not by default, can be configured
     admin_dashboard: true,
     super_admin_dashboard: true,
+    mark_attendance: false,  // Not by default, can be configured
   },
 };
 

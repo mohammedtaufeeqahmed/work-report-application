@@ -169,7 +169,7 @@ export async function initializeDatabase(): Promise<void> {
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       department TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('working', 'leave')),
+      status TEXT NOT NULL CHECK(status IN ('working', 'leave', 'absent')),
       work_report TEXT,
       on_duty BOOLEAN DEFAULT FALSE NOT NULL,
       created_at TIMESTAMP DEFAULT NOW() NOT NULL

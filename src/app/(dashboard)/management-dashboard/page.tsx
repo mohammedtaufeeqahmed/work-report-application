@@ -161,6 +161,12 @@ export default function ManagementDashboardPage() {
     return days;
   }, [statusData]);
 
+  // Create a stable reference to employees array to ensure all three tables stay in sync
+  const employeesList = useMemo(() => {
+    if (!statusData) return [];
+    return statusData.employees;
+  }, [statusData]);
+
   // Calculate department stats from monthly status data
   const monthlyDepartmentStats = useMemo(() => {
     if (!statusData) return [];
@@ -490,7 +496,7 @@ export default function ManagementDashboardPage() {
               </div>
             ) : error ? (
               <div className="py-20 text-center text-destructive">{error}</div>
-            ) : statusData && statusData.employees.length > 0 ? (
+            ) : statusData && employeesList.length > 0 ? (
               <div className="flex">
                 {/* Fixed Left Columns */}
                 <div className="flex-shrink-0 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
@@ -502,8 +508,8 @@ export default function ManagementDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {statusData.employees.map((employee, index) => (
-                        <tr key={employee.employeeId} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      {employeesList.map((employee, index) => (
+                        <tr key={`left-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                           <td className="py-2.5 px-4 w-[110px] h-[56px]">
                             <span className="text-xs font-medium text-muted-foreground">{employee.department}</span>
                           </td>
@@ -530,8 +536,8 @@ export default function ManagementDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {statusData.employees.map((employee, index) => (
-                        <tr key={employee.employeeId} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      {employeesList.map((employee, index) => (
+                        <tr key={`middle-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                           {daysArray.map(({ dateStr }) => (
                             <td key={dateStr} className="py-2.5 px-1 text-center h-[56px]">
                               {getStatusCell(employee.dailyStatus[dateStr])}
@@ -552,12 +558,12 @@ export default function ManagementDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {statusData.employees.map((employee, index) => {
+                      {employeesList.map((employee, index) => {
                         const rate = employee.workingDaysCount > 0 
                           ? Math.round((employee.submittedCount / employee.workingDaysCount) * 100) 
                           : 0;
                         return (
-                          <tr key={employee.employeeId} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                          <tr key={`right-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                             <td className="py-2.5 px-4 text-center w-[80px] h-[56px]">
                               <div className="flex flex-col items-center gap-1">
                                 <span className={`text-sm font-bold ${
@@ -588,9 +594,9 @@ export default function ManagementDashboardPage() {
             )}
 
             {/* Footer */}
-            {statusData && statusData.employees.length > 0 && (
+            {statusData && employeesList.length > 0 && (
               <div className="px-5 py-3 border-t bg-muted/30 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                <span><strong className="text-foreground">{statusData.employees.length}</strong> employees</span>
+                <span><strong className="text-foreground">{employeesList.length}</strong> employees</span>
                 <span><strong className="text-foreground">{statusData.daysInMonth}</strong> days in month</span>
                 <span><strong className="text-foreground">{daysArray.filter(d => !d.isSunday).length}</strong> working days</span>
               </div>

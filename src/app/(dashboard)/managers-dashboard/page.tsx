@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Loader2, Search, Users, Calendar, FileText, Filter, Shield } from 'lucide-react';
-import type { WorkReport } from '@/types';
+import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX } from 'lucide-react';
+import { toast } from 'sonner';
+import type { WorkReport, SafeEmployee, SessionUser } from '@/types';
 import { getISTDateRangeFromDays } from '@/lib/date';
 
 const chartConfig = {
@@ -18,12 +20,32 @@ export default function ManagersDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [teamEmployees, setTeamEmployees] = useState<SafeEmployee[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [markingAbsent, setMarkingAbsent] = useState<string | null>(null);
+  const [absentDate, setAbsentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
   // Use IST for date range (last 7 days)
   const [dateRange, setDateRange] = useState(getISTDateRangeFromDays(7));
 
   useEffect(() => {
+    fetchSession();
     fetchReports();
+    fetchTeamEmployees();
   }, []);
+
+  const fetchSession = async () => {
+    try {
+      const response = await fetch('/api/auth/session');
+      const data = await response.json();
+      if (data.success) {
+        setUser(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch session:', error);
+    }
+  };
 
   const fetchReports = async () => {
     setLoading(true);
@@ -38,6 +60,48 @@ export default function ManagersDashboardPage() {
     }
   };
 
+  const fetchTeamEmployees = async () => {
+    setLoadingTeam(true);
+    try {
+      const response = await fetch('/api/managers/team');
+      const data = await response.json();
+      if (data.success) setTeamEmployees(data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch team employees:', error);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  const handleMarkAbsent = async (employeeId: string) => {
+    if (!absentDate) {
+      toast.error('Please select a date');
+      return;
+    }
+
+    setMarkingAbsent(employeeId);
+    try {
+      const response = await fetch('/api/work-reports/mark-absent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, date: absentDate }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`Employee marked as absent (leave) for ${absentDate}`);
+        fetchReports(); // Refresh reports
+      } else {
+        toast.error(data.error || 'Failed to mark employee as absent');
+      }
+    } catch (error) {
+      console.error('Failed to mark absent:', error);
+      toast.error('Failed to mark employee as absent');
+    } finally {
+      setMarkingAbsent(null);
+    }
+  };
+
   const filteredReports = reports.filter(report =>
     report.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     report.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -45,14 +109,15 @@ export default function ManagersDashboardPage() {
   );
 
   const workingCount = filteredReports.filter(r => r.status === 'working').length;
-  const leaveCount = filteredReports.filter(r => r.status === 'leave').length;
+  // Treat absent as leave - combine both counts
+  const leaveCount = filteredReports.filter(r => r.status === 'leave' || r.status === 'absent').length;
   const onDutyCount = filteredReports.filter(r => r.onDuty).length;
 
   const departmentData = filteredReports.reduce((acc, report) => {
     const dept = report.department;
     if (!acc[dept]) acc[dept] = { department: dept, working: 0, leave: 0 };
     if (report.status === 'working') acc[dept].working++;
-    else acc[dept].leave++;
+    else if (report.status === 'leave' || report.status === 'absent') acc[dept].leave++;
     return acc;
   }, {} as Record<string, { department: string; working: number; leave: number }>);
 
@@ -67,7 +132,7 @@ export default function ManagersDashboardPage() {
     const key = report.employeeId;
     if (!acc[key]) acc[key] = { employeeId: key, name: report.name, department: report.department, working: 0, leave: 0, onDuty: 0 };
     if (report.status === 'working') acc[key].working++;
-    else acc[key].leave++;
+    else if (report.status === 'leave' || report.status === 'absent') acc[key].leave++;
     if (report.onDuty) acc[key].onDuty++;
     return acc;
   }, {} as Record<string, { employeeId: string; name: string; department: string; working: number; leave: number; onDuty: number }>);
@@ -79,9 +144,80 @@ export default function ManagersDashboardPage() {
       <div className="container py-8 px-4 md:px-6">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold">Managers Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Team work report analytics</p>
+          <div className="mb-8 flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">Managers Dashboard</h1>
+              <p className="text-sm text-muted-foreground">Team work report analytics</p>
+            </div>
+            {user?.pageAccess?.mark_attendance && (
+              <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+                <SheetTrigger asChild>
+                  <Button>
+                    <UserX className="h-4 w-4 mr-2" />
+                    Mark Absent
+                  </Button>
+                </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Mark Employee as Absent</SheetTitle>
+                  <SheetDescription>
+                    {user?.role === 'manager'
+                      ? 'Select an employee and date to mark them as absent. You can only mark employees in your team.'
+                      : 'Select an employee and date to mark them as absent. You can mark any employee.'}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Date</label>
+                    <Input
+                      type="date"
+                      value={absentDate}
+                      onChange={(e) => setAbsentDate(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      {user?.role === 'manager' ? 'Team Employees' : 'All Employees'}
+                    </label>
+                    {loadingTeam ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : teamEmployees.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4">No team employees found</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {teamEmployees.map((employee) => (
+                          <div
+                            key={employee.employeeId}
+                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
+                          >
+                            <div>
+                              <p className="font-medium text-sm">{employee.name}</p>
+                              <p className="text-xs text-muted-foreground">{employee.employeeId} • {employee.department}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMarkAbsent(employee.employeeId)}
+                              disabled={markingAbsent === employee.employeeId}
+                            >
+                              {markingAbsent === employee.employeeId ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                'Mark Absent'
+                              )}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+            )}
           </div>
 
           {/* Filters */}
