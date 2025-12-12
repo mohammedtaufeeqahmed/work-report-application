@@ -5,7 +5,8 @@ import {
   getTeamEmployeesForManager,
   getWorkReportByEmployeeAndDate,
   createWorkReport,
-  updateWorkReport
+  updateWorkReport,
+  getManagerDepartmentIds
 } from '@/lib/db/queries';
 import type { ApiResponse, WorkReport } from '@/types';
 
@@ -60,9 +61,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For managers and Operations users, verify that the employee is in their assigned departments
-    // For other users with mark_attendance permission, allow marking any employee
-    if (session.role === 'manager' || session.department === 'Operations') {
+    // For managers, verify that the employee is in their assigned departments
+    if (session.role === 'manager') {
       const teamEmployees = await getTeamEmployeesForManager(session.id);
       const isTeamMember = teamEmployees.some(emp => emp.employeeId === employeeId);
       
@@ -72,6 +72,23 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+    } else if (session.department === 'Operations') {
+      // For Operations users: if they have departments assigned, check those; otherwise allow all
+      const departmentIds = await getManagerDepartmentIds(session.id);
+      
+      if (departmentIds.length > 0) {
+        // Has departments assigned - check if employee is in those departments
+        const teamEmployees = await getTeamEmployeesForManager(session.id);
+        const isTeamMember = teamEmployees.some(emp => emp.employeeId === employeeId);
+        
+        if (!isTeamMember) {
+          return NextResponse.json<ApiResponse>(
+            { success: false, error: 'You can only mark absent for employees in your assigned departments' },
+            { status: 403 }
+          );
+        }
+      }
+      // If no departments assigned, Operations users can mark any employee
     }
     // Other non-manager users with mark_attendance permission can mark any employee, no department check needed
 

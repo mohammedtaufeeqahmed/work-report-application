@@ -27,10 +27,20 @@ export async function GET(request: NextRequest) {
 
     let employeesList: SafeEmployee[];
 
-    if (session.role === 'manager' || session.department === 'Operations') {
-      // Managers and Operations users see employees from their assigned departments
-      // Reuse the same function that works for managers (it uses manager_departments table)
+    if (session.role === 'manager') {
+      // Managers see employees from their assigned departments
       employeesList = await getTeamEmployeesForManager(session.id);
+    } else if (session.department === 'Operations') {
+      // Operations users: if they have departments assigned, show only those; otherwise show all employees
+      const departmentIds = await getManagerDepartmentIds(session.id);
+      if (departmentIds.length > 0) {
+        // Has departments assigned - show only employees from those departments
+        employeesList = await getTeamEmployeesForManager(session.id);
+      } else {
+        // No departments assigned - show all active employees
+        const allEmployees = await getAllEmployees();
+        employeesList = allEmployees.filter(emp => emp.status === 'active' && emp.employeeId !== session.employeeId);
+      }
     } else {
       // Other non-manager users with mark_attendance permission can see all active employees
       const allEmployees = await getAllEmployees();
