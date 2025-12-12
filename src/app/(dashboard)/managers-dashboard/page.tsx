@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX } from 'lucide-react';
+import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX, CheckCircle2, XCircle, Building2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkReport, SafeEmployee, SessionUser } from '@/types';
-import { getISTDateRangeFromDays } from '@/lib/date';
+import { getISTDateRangeFromDays, getISTTodayDateString, getFullDateIST } from '@/lib/date';
 
 const chartConfig = {
   working: { label: 'Working', color: '#22c55e' },
@@ -23,9 +23,12 @@ export default function ManagersDashboardPage() {
   const [teamEmployees, setTeamEmployees] = useState<SafeEmployee[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [markingAbsent, setMarkingAbsent] = useState<string | null>(null);
-  const [absentDate, setAbsentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [absentDate, setAbsentDate] = useState(getISTTodayDateString());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [recentlyMarked, setRecentlyMarked] = useState<Set<string>>(new Set());
   // Use IST for date range (last 7 days)
   const [dateRange, setDateRange] = useState(getISTDateRangeFromDays(7));
 
@@ -34,6 +37,12 @@ export default function ManagersDashboardPage() {
     fetchReports();
     fetchTeamEmployees();
   }, []);
+
+  useEffect(() => {
+    if (sheetOpen) {
+      fetchTeamEmployees();
+    }
+  }, [sheetOpen]);
 
   const fetchSession = async () => {
     try {
@@ -89,7 +98,16 @@ export default function ManagersDashboardPage() {
 
       const data = await response.json();
       if (data.success) {
-        toast.success(`Employee marked as absent (leave) for ${absentDate}`);
+        const employee = teamEmployees.find(emp => emp.employeeId === employeeId);
+        toast.success(`${employee?.name || 'Employee'} marked as absent (leave) for ${getFullDateIST(absentDate)}`);
+        setRecentlyMarked(prev => new Set(prev).add(employeeId));
+        setTimeout(() => {
+          setRecentlyMarked(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(employeeId);
+            return newSet;
+          });
+        }, 3000);
         fetchReports(); // Refresh reports
       } else {
         toast.error(data.error || 'Failed to mark employee as absent');
@@ -139,6 +157,19 @@ export default function ManagersDashboardPage() {
 
   const employeeData = Object.values(employeeSummary).sort((a, b) => (b.working + b.leave) - (a.working + a.leave));
 
+  // Filter employees for the mark absent modal
+  const filteredEmployees = teamEmployees.filter(emp => {
+    const matchesSearch = employeeSearch === '' || 
+      emp.name.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+      emp.employeeId.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+      emp.department.toLowerCase().includes(employeeSearch.toLowerCase());
+    const matchesDepartment = selectedDepartment === 'all' || emp.department === selectedDepartment;
+    return matchesSearch && matchesDepartment;
+  });
+
+  // Get unique departments for filter
+  const departments = Array.from(new Set(teamEmployees.map(emp => emp.department))).sort();
+
   return (
     <div className="min-h-screen pt-14">
       <div className="container py-8 px-4 md:px-6">
@@ -152,68 +183,183 @@ export default function ManagersDashboardPage() {
             {user?.pageAccess?.mark_attendance && (
               <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
                 <SheetTrigger asChild>
-                  <Button>
-                    <UserX className="h-4 w-4 mr-2" />
+                  <Button className="gap-2">
+                    <UserX className="h-4 w-4" />
                     Mark Absent
                   </Button>
                 </SheetTrigger>
-              <SheetContent>
+              <SheetContent className="sm:max-w-[600px] overflow-y-auto">
                 <SheetHeader>
-                  <SheetTitle>Mark Employee as Absent</SheetTitle>
+                  <SheetTitle className="flex items-center gap-2">
+                    <UserX className="h-5 w-5" />
+                    Mark Employee as Absent
+                  </SheetTitle>
                   <SheetDescription>
                     {user?.role === 'manager'
-                      ? 'Select an employee and date to mark them as absent. You can only mark employees in your team.'
-                      : 'Select an employee and date to mark them as absent. You can mark any employee.'}
+                      ? 'Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.'
+                      : user?.department === 'Operations'
+                      ? 'Select an employee and date to mark them as absent. You can mark employees from your assigned departments or all employees if no departments are assigned.'
+                      : 'Select an employee and date to mark them as absent.'}
                   </SheetDescription>
                 </SheetHeader>
-                <div className="mt-6 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Date</label>
+                
+                <div className="mt-6 space-y-6">
+                  {/* Date Selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Select Date
+                    </label>
                     <Input
                       type="date"
                       value={absentDate}
                       onChange={(e) => setAbsentDate(e.target.value)}
+                      max={getISTTodayDateString()}
                       className="w-full"
                     />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      {user?.role === 'manager' ? 'Team Employees' : 'All Employees'}
-                    </label>
-                    {loadingTeam ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : teamEmployees.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4">No team employees found</p>
-                    ) : (
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                        {teamEmployees.map((employee) => (
-                          <div
-                            key={employee.employeeId}
-                            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
-                          >
-                            <div>
-                              <p className="font-medium text-sm">{employee.name}</p>
-                              <p className="text-xs text-muted-foreground">{employee.employeeId} • {employee.department}</p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleMarkAbsent(employee.employeeId)}
-                              disabled={markingAbsent === employee.employeeId}
-                            >
-                              {markingAbsent === employee.employeeId ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                'Mark Absent'
-                              )}
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                    {absentDate && (
+                      <p className="text-xs text-muted-foreground">
+                        {getFullDateIST(absentDate)}
+                      </p>
                     )}
                   </div>
+
+                  {/* Employee Count */}
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        {filteredEmployees.length} {filteredEmployees.length === 1 ? 'Employee' : 'Employees'}
+                      </span>
+                    </div>
+                    {teamEmployees.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        Total: {teamEmployees.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Search and Filter */}
+                  {teamEmployees.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by name, ID, or department..."
+                          value={employeeSearch}
+                          onChange={(e) => setEmployeeSearch(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                      {departments.length > 1 && (
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-4 w-4 text-muted-foreground" />
+                          <select
+                            value={selectedDepartment}
+                            onChange={(e) => setSelectedDepartment(e.target.value)}
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <option value="all">All Departments</option>
+                            {departments.map(dept => (
+                              <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Employee List */}
+                  {loadingTeam ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Loading employees...</p>
+                    </div>
+                  ) : teamEmployees.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <Users className="h-12 w-12 text-muted-foreground/50" />
+                      <div>
+                        <p className="text-sm font-medium">No employees found</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {user?.role === 'manager'
+                            ? 'No employees are assigned to your departments yet.'
+                            : 'No employees available to mark as absent.'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : filteredEmployees.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <Search className="h-12 w-12 text-muted-foreground/50" />
+                      <div>
+                        <p className="text-sm font-medium">No employees match your search</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Try adjusting your search or filter criteria.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                      {filteredEmployees.map((employee) => {
+                        const isMarking = markingAbsent === employee.employeeId;
+                        const isRecentlyMarked = recentlyMarked.has(employee.employeeId);
+                        return (
+                          <div
+                            key={employee.employeeId}
+                            className={`group relative p-4 border rounded-lg transition-all ${
+                              isRecentlyMarked
+                                ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                                : 'bg-card hover:bg-muted/50 border-border'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-medium text-sm truncate">{employee.name}</h4>
+                                  {isRecentlyMarked && (
+                                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <span className="font-mono">{employee.employeeId}</span>
+                                  </span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Building2 className="h-3 w-3" />
+                                    {employee.department}
+                                  </span>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={isRecentlyMarked ? "default" : "outline"}
+                                onClick={() => handleMarkAbsent(employee.employeeId)}
+                                disabled={isMarking || !absentDate}
+                                className="flex-shrink-0 gap-2"
+                              >
+                                {isMarking ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span>Marking...</span>
+                                  </>
+                                ) : isRecentlyMarked ? (
+                                  <>
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    <span>Marked</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="h-3.5 w-3.5" />
+                                    <span>Mark Absent</span>
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>

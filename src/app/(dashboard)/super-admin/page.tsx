@@ -443,8 +443,8 @@ export default function SuperAdminPage() {
       const data = await response.json();
 
       if (data.success) {
-        // If manager or Operations user, update their departments
-        if ((editFormData.role === 'manager' || editFormData.department === 'Operations') && editFormData.departmentIds.length > 0) {
+        // If manager or Operations user, update their departments (even if empty to clear them)
+        if (editFormData.role === 'manager' || editFormData.department === 'Operations') {
           await fetch(`/api/admin/users/${editingUser.id}/departments`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -1937,6 +1937,53 @@ export default function SuperAdminPage() {
                           </div>
                         )}
                       </div>
+                      {editFormData.departmentIds.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: {editFormData.departmentIds.map(id => departments.find(d => d.id === id)?.name).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Departments - Multi select for Operations department users */}
+                  {editFormData.department === 'Operations' && (
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Departments * (Select multiple - employees from these departments can be marked absent)</Label>
+                      <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                        {!editFormData.entityId ? (
+                          <p className="text-sm text-muted-foreground">Select an entity first to see available departments.</p>
+                        ) : departments.filter(d => d.entityId === editFormData.entityId).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No departments available for this entity.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {departments
+                              .filter(d => d.entityId === editFormData.entityId)
+                              .map((dept) => (
+                                <label
+                                  key={dept.id}
+                                  className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                    editFormData.departmentIds.includes(dept.id)
+                                      ? 'bg-primary/10 border border-primary'
+                                      : 'bg-muted/50 hover:bg-muted'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={editFormData.departmentIds.includes(dept.id)}
+                                    onChange={() => handleEditDepartmentToggle(dept.id)}
+                                    className="rounded"
+                                  />
+                                  <span className="text-sm">{dept.name}</span>
+                                </label>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      {editFormData.departmentIds.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: {editFormData.departmentIds.map(id => departments.find(d => d.id === id)?.name).join(', ')}
+                        </p>
+                      )}
                     </div>
                   )}
 
