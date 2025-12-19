@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Loader2, Users, Calendar, Briefcase, Coffee, ChevronLeft, ChevronRight, Filter, X, TrendingUp, Building2 } from 'lucide-react';
+import { Loader2, Users, Calendar, Briefcase, Coffee, ChevronLeft, ChevronRight, Filter, X, TrendingUp, Building2, Check, Clock, Building } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import type { Entity, Branch, Department } from '@/types';
 
 interface EmployeeReportStatus {
@@ -189,34 +190,54 @@ export default function ManagementDashboardPage() {
       .sort((a, b) => b.total - a.total);
   }, [statusData]);
 
+  // Get department tag color
+  const getDepartmentTagColor = (department: string) => {
+    const deptLower = department.toLowerCase();
+    if (deptLower.includes('account')) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
+    if (deptLower.includes('admin')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+    if (deptLower.includes('board')) return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800';
+    if (deptLower.includes('call')) return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700';
+    return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800';
+  };
+
+  // Get employee initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   const getStatusCell = (status: 'submitted' | 'leave' | 'not_submitted' | 'sunday' | 'future') => {
     switch (status) {
       case 'submitted':
         return (
-          <div className="w-7 h-7 rounded bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center" title="Submitted">
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">✓</span>
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center" title="Submitted">
+            <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
         );
       case 'leave':
         return (
-          <div className="w-7 h-7 rounded bg-blue-500/20 border border-blue-500/30 flex items-center justify-center" title="Leave">
-            <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold">L</span>
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center" title="Leave">
+            <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 dark:text-blue-400 rotate-[-90deg]" />
           </div>
         );
       case 'not_submitted':
         return (
-          <div className="w-7 h-7 rounded bg-rose-500/20 border border-rose-500/30 flex items-center justify-center" title="Not Submitted">
-            <span className="text-rose-600 dark:text-rose-400 text-xs font-semibold">✗</span>
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center" title="Missing">
+            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 dark:text-red-400" />
           </div>
         );
       case 'sunday':
         return (
-          <div className="w-7 h-7 rounded bg-muted/50 flex items-center justify-center" title="Holiday (Sunday)">
-            <span className="text-muted-foreground text-xs">—</span>
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center" title="Holiday">
+            <Building className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500 dark:text-gray-400" />
           </div>
         );
       case 'future':
-        return <div className="w-7 h-7" />;
+        return <div className="w-7 h-7 sm:w-8 sm:h-8" />;
     }
   };
 
@@ -394,14 +415,67 @@ export default function ManagementDashboardPage() {
           {/* Monthly Status Table */}
           <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
             {/* Header */}
-            <div className="px-5 py-4 border-b">
+            <div className="px-5 py-4 border-b bg-gradient-to-r from-background to-muted/20">
+              <div className="mb-4">
+                <h3 className="font-semibold text-lg">Monthly Submission Status</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Daily work report submission tracking</p>
+              </div>
+
+              {/* Filters and Date Navigation */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-semibold">Monthly Submission Status</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Daily work report submission tracking</p>
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Filter className="h-4 w-4" />
+                    <span className="text-xs sm:text-sm font-medium">Filters:</span>
+                  </div>
+
+                  <select
+                    value={selectedEntity}
+                    onChange={(e) => {
+                      setSelectedEntity(e.target.value);
+                      setSelectedBranch('all');
+                      setSelectedDepartment('all');
+                    }}
+                    className="h-8 sm:h-9 px-2 sm:px-3 rounded-md border border-input bg-background text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+                  >
+                    <option value="all">All Entities</option>
+                    {statusData?.entities.map((entity) => (
+                      <option key={entity.id} value={entity.id.toString()}>{entity.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className="h-8 sm:h-9 px-2 sm:px-3 rounded-md border border-input bg-background text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+                  >
+                    <option value="all">All Branches</option>
+                    {filteredBranches.map((branch) => (
+                      <option key={branch.id} value={branch.id.toString()}>{branch.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    className="h-8 sm:h-9 px-2 sm:px-3 rounded-md border border-input bg-background text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+                  >
+                    <option value="all">All Departments</option>
+                    {filteredDepartments.map((dept) => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))}
+                  </select>
+
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={handleClearFilters} className="h-8 sm:h-9 text-muted-foreground text-xs sm:text-sm">
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      Clear
+                    </Button>
+                  )}
                 </div>
-                
-                {/* Month Navigation */}
+
+                {/* Date Navigation */}
                 <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
                   <Button variant="ghost" size="sm" onClick={handlePrevMonth} className="h-8 w-8 p-0">
                     <ChevronLeft className="h-4 w-4" />
@@ -415,75 +489,23 @@ export default function ManagementDashboardPage() {
                 </div>
               </div>
 
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Filter className="h-4 w-4" />
-                  <span className="text-sm font-medium">Filters:</span>
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t text-xs">
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-muted-foreground">Submitted</span>
                 </div>
-
-                <select
-                  value={selectedEntity}
-                  onChange={(e) => {
-                    setSelectedEntity(e.target.value);
-                    setSelectedBranch('all');
-                    setSelectedDepartment('all');
-                  }}
-                  className="h-8 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="all">All Entities</option>
-                  {statusData?.entities.map((entity) => (
-                    <option key={entity.id} value={entity.id.toString()}>{entity.name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="h-8 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="all">All Branches</option>
-                  {filteredBranches.map((branch) => (
-                    <option key={branch.id} value={branch.id.toString()}>{branch.name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) => setSelectedDepartment(e.target.value)}
-                  className="h-8 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="all">All Departments</option>
-                  {filteredDepartments.map((dept) => (
-                    <option key={dept.id} value={dept.name}>{dept.name}</option>
-                  ))}
-                </select>
-
-                {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={handleClearFilters} className="h-8 text-muted-foreground">
-                    <X className="h-3.5 w-3.5 mr-1" />
-                    Clear
-                  </Button>
-                )}
-
-                {/* Legend - Right aligned */}
-                <div className="flex items-center gap-4 ml-auto text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-emerald-500/20 border border-emerald-500/30"></div>
-                    <span className="text-muted-foreground">Submitted</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-rose-500/20 border border-rose-500/30"></div>
-                    <span className="text-muted-foreground">Missing</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500/30"></div>
-                    <span className="text-muted-foreground">Leave</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded bg-muted/50"></div>
-                    <span className="text-muted-foreground">Holiday</span>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <X className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span className="text-muted-foreground">Missing</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 rotate-[-90deg]" />
+                  <span className="text-muted-foreground">Leave</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Building className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  <span className="text-muted-foreground">Holiday</span>
                 </div>
               </div>
             </div>
@@ -497,93 +519,81 @@ export default function ManagementDashboardPage() {
             ) : error ? (
               <div className="py-20 text-center text-destructive">{error}</div>
             ) : statusData && employeesList.length > 0 ? (
-              <div className="flex">
-                {/* Fixed Left Columns */}
-                <div className="flex-shrink-0 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                  <table className="text-sm">
-                    <thead>
-                      <tr className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                        <th className="text-left py-3 px-4 font-medium w-[110px]">Department</th>
-                        <th className="text-left py-3 px-4 font-medium w-[150px]">Employee</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {employeesList.map((employee, index) => (
-                        <tr key={`left-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                          <td className="py-2.5 px-4 w-[110px] h-[56px]">
-                            <span className="text-xs font-medium text-muted-foreground">{employee.department}</span>
-                          </td>
-                          <td className="py-2.5 px-4 w-[150px] h-[56px]">
-                            <p className="font-medium text-sm truncate">{employee.name}</p>
-                            <p className="text-xs text-muted-foreground">{employee.employeeId}</p>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Scrollable Middle Section */}
-                <div className="flex-1 overflow-x-auto">
-                  <table className="text-sm">
-                    <thead>
-                      <tr className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                        {daysArray.map(({ day, isSunday }) => (
-                          <th key={day} className={`py-3 px-1 font-medium text-center w-9 ${isSunday ? 'opacity-50' : ''}`}>
-                            {day}
+              <div className="overflow-x-auto -mx-5 sm:mx-0">
+                <div className="inline-block min-w-full align-middle px-5 sm:px-0">
+                  <div className="overflow-visible">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/50 border-b">
+                          <th className="text-left py-3 px-3 sm:px-4 font-medium sticky left-0 z-20 bg-muted/50 backdrop-blur-sm min-w-[240px] sm:min-w-[280px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                            <span className="hidden sm:inline">Employee</span>
+                            <span className="sm:hidden">Emp</span>
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {employeesList.map((employee, index) => (
-                        <tr key={`middle-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                          {daysArray.map(({ dateStr }) => (
-                            <td key={dateStr} className="py-2.5 px-1 text-center h-[56px]">
-                              {getStatusCell(employee.dailyStatus[dateStr])}
-                            </td>
+                          {daysArray.map(({ day, isSunday }) => (
+                            <th 
+                              key={day} 
+                              className={`py-3 px-1 sm:px-2 font-medium text-center min-w-[36px] sm:min-w-[40px] text-xs sm:text-sm ${isSunday ? 'opacity-50' : ''}`}
+                            >
+                              {day}
+                            </th>
                           ))}
+                          <th className="text-center py-3 px-3 sm:px-4 font-medium sticky right-0 z-20 bg-muted/50 backdrop-blur-sm min-w-[70px] sm:min-w-[80px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                            Summary
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Fixed Right Column */}
-                <div className="flex-shrink-0 border-l shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                  <table className="text-sm">
-                    <thead>
-                      <tr className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-                        <th className="py-3 px-4 font-medium text-center w-[80px]">Score</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {employeesList.map((employee, index) => {
-                        const rate = employee.workingDaysCount > 0 
-                          ? Math.round((employee.submittedCount / employee.workingDaysCount) * 100) 
-                          : 0;
-                        return (
-                          <tr key={`right-${employee.employeeId}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                            <td className="py-2.5 px-4 text-center w-[80px] h-[56px]">
-                              <div className="flex flex-col items-center gap-1">
-                                <span className={`text-sm font-bold ${
-                                  rate === 100 ? 'text-emerald-600' : rate >= 50 ? 'text-amber-600' : 'text-rose-600'
-                                }`}>
-                                  {employee.submittedCount}/{employee.workingDaysCount}
-                                </span>
-                                <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full ${rate === 100 ? 'bg-emerald-500' : rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                                    style={{ width: `${rate}%` }}
-                                  />
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {employeesList.map((employee, index) => {
+                          // Calculate total working days (excluding holidays and future days)
+                          const totalWorkingDays = daysArray.filter(d => {
+                            const status = employee.dailyStatus[d.dateStr];
+                            return status && status !== 'future' && status !== 'sunday';
+                          }).length;
+                          
+                          return (
+                            <tr 
+                              key={employee.employeeId} 
+                              className={`hover:bg-muted/30 transition-colors ${
+                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                              }`}
+                            >
+                              {/* Employee Profile Column */}
+                              <td className="py-3 px-3 sm:px-4 sticky left-0 z-10 bg-inherit min-w-[240px] sm:min-w-[280px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                  <Avatar className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0">
+                                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs sm:text-sm">
+                                      {getInitials(employee.name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-xs sm:text-sm truncate">{employee.name}</p>
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground font-mono truncate">{employee.employeeId}</p>
+                                    <span className={`inline-block mt-1 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full border font-medium ${getDepartmentTagColor(employee.department)}`}>
+                                      {employee.department}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              </td>
+                              
+                              {/* Daily Status Cells */}
+                              {daysArray.map(({ dateStr }) => (
+                                <td key={dateStr} className="py-2 sm:py-3 px-1 sm:px-2 text-center align-middle">
+                                  {getStatusCell(employee.dailyStatus[dateStr])}
+                                </td>
+                              ))}
+                              
+                              {/* Summary Counter */}
+                              <td className="py-3 px-3 sm:px-4 text-center sticky right-0 z-10 bg-inherit min-w-[70px] sm:min-w-[80px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                                <span className="text-xs sm:text-sm font-semibold text-muted-foreground">
+                                  {employee.submittedCount}/{totalWorkingDays || employee.workingDaysCount}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             ) : (
