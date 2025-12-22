@@ -6,6 +6,7 @@
  * Google Sheets is write-only and non-critical.
  */
 
+import { logger } from './logger';
 import type { WorkReport } from '@/types';
 
 // Google Sheets configuration
@@ -47,7 +48,7 @@ export async function appendToGoogleSheet(report: WorkReport): Promise<void> {
   const config = getConfig();
   
   if (!config) {
-    console.log('[GoogleSheets] Not configured - skipping backup');
+    logger.log('[GoogleSheets] Not configured - skipping backup');
     return;
   }
 
@@ -90,10 +91,10 @@ export async function appendToGoogleSheet(report: WorkReport): Promise<void> {
       },
     });
 
-    console.log(`[GoogleSheets] Work report ${report.id} backed up successfully`);
+    logger.log(`[GoogleSheets] Work report ${report.id} backed up successfully`);
   } catch (error) {
     // Log error but don't throw - this is a backup operation
-    console.error('[GoogleSheets] Backup failed:', error);
+    logger.error('[GoogleSheets] Backup failed:', error);
     
     // Optionally: Store failed backups for retry later
     // This could be implemented with a separate queue or database table
@@ -107,7 +108,7 @@ export async function initializeGoogleSheet(): Promise<void> {
   const config = getConfig();
   
   if (!config) {
-    console.log('[GoogleSheets] Not configured - cannot initialize');
+    logger.log('[GoogleSheets] Not configured - cannot initialize');
     return;
   }
 
@@ -146,9 +147,9 @@ export async function initializeGoogleSheet(): Promise<void> {
       },
     });
 
-    console.log('[GoogleSheets] Headers initialized successfully');
+    logger.log('[GoogleSheets] Headers initialized successfully');
   } catch (error) {
-    console.error('[GoogleSheets] Failed to initialize headers:', error);
+    logger.error('[GoogleSheets] Failed to initialize headers:', error);
   }
 }
 
@@ -159,7 +160,7 @@ export async function batchBackupToGoogleSheet(reports: WorkReport[]): Promise<v
   const config = getConfig();
   
   if (!config) {
-    console.log('[GoogleSheets] Not configured - skipping batch backup');
+    logger.log('[GoogleSheets] Not configured - skipping batch backup');
     return;
   }
 
@@ -203,9 +204,9 @@ export async function batchBackupToGoogleSheet(reports: WorkReport[]): Promise<v
       },
     });
 
-    console.log(`[GoogleSheets] ${reports.length} work reports backed up successfully`);
+    logger.log(`[GoogleSheets] ${reports.length} work reports backed up successfully`);
   } catch (error) {
-    console.error('[GoogleSheets] Batch backup failed:', error);
+    logger.error('[GoogleSheets] Batch backup failed:', error);
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { 
   getAllDepartments, 
   createDepartment, 
@@ -20,12 +21,18 @@ export async function GET() {
 
     const departments = await getAllDepartments();
 
-    return NextResponse.json<ApiResponse<Department[]>>({
+    // Add caching headers - departments change infrequently but admins need to see new ones
+    const response = NextResponse.json<ApiResponse<Department[]>>({
       success: true,
       data: departments,
     });
+    
+    // Cache for 1 minute - short enough for admin operations, long enough for performance
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    
+    return response;
   } catch (error) {
-    console.error('Get departments error:', error);
+    logger.error('Get departments error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch departments' },
       { status: 500 }
@@ -82,7 +89,7 @@ export async function POST(request: NextRequest) {
       message: 'Department created successfully',
     }, { status: 201 });
   } catch (error) {
-    console.error('Create department error:', error);
+    logger.error('Create department error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to create department' },
       { status: 500 }

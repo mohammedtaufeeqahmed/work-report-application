@@ -1,4 +1,5 @@
 import { eq, and, desc, like, inArray, sql, or } from 'drizzle-orm';
+import { logger } from '../logger';
 import { db, pool } from './database';
 import {
   entities,
@@ -74,7 +75,7 @@ function toSafeEmployee(row: typeof employees.$inferSelect): SafeEmployee {
     try {
       pageAccess = JSON.parse(row.pageAccess);
     } catch (error) {
-      console.error('Failed to parse pageAccess JSON:', error);
+      logger.error('Failed to parse pageAccess JSON:', error);
       pageAccess = null;
     }
   }
@@ -236,6 +237,42 @@ export async function getEmployeesByBranch(branchId: number): Promise<SafeEmploy
     .from(employees)
     .where(eq(employees.branchId, branchId))
     .orderBy(desc(employees.createdAt));
+  return results.map(toSafeEmployee);
+}
+
+/**
+ * Get employees with optional filters (optimized - filters at database level)
+ */
+export async function getEmployeesWithFilters(filters: {
+  entityId?: number | null;
+  branchId?: number | null;
+  department?: string | null;
+  status?: 'active' | 'inactive';
+}): Promise<SafeEmployee[]> {
+  const conditions = [];
+  
+  if (filters.status !== undefined) {
+    conditions.push(eq(employees.status, filters.status));
+  }
+  
+  if (filters.entityId !== undefined && filters.entityId !== null) {
+    conditions.push(eq(employees.entityId, filters.entityId));
+  }
+  
+  if (filters.branchId !== undefined && filters.branchId !== null) {
+    conditions.push(eq(employees.branchId, filters.branchId));
+  }
+  
+  if (filters.department !== undefined && filters.department !== null) {
+    conditions.push(eq(employees.department, filters.department));
+  }
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  const results = whereClause
+    ? await db.select().from(employees).where(whereClause).orderBy(desc(employees.createdAt))
+    : await db.select().from(employees).orderBy(desc(employees.createdAt));
+  
   return results.map(toSafeEmployee);
 }
 
@@ -485,6 +522,54 @@ export async function getWorkReportsByDateRange(startDate: string, endDate: stri
     .select()
     .from(workReports)
     .where(and(sql`${workReports.date} >= ${startDate}`, sql`${workReports.date} <= ${endDate}`))
+    .orderBy(desc(workReports.date));
+  return results.map(toWorkReport);
+}
+
+/**
+ * Get work reports by date range and departments (optimized - filters at database level)
+ */
+export async function getWorkReportsByDateRangeAndDepartments(
+  startDate: string,
+  endDate: string,
+  departmentNames: string[]
+): Promise<WorkReport[]> {
+  if (departmentNames.length === 0) {
+    return [];
+  }
+  
+  const results = await db
+    .select()
+    .from(workReports)
+    .where(
+      and(
+        sql`${workReports.date} >= ${startDate}`,
+        sql`${workReports.date} <= ${endDate}`,
+        inArray(workReports.department, departmentNames)
+      )
+    )
+    .orderBy(desc(workReports.date));
+  return results.map(toWorkReport);
+}
+
+/**
+ * Get work reports by employee and date range (optimized)
+ */
+export async function getWorkReportsByEmployeeAndDateRange(
+  employeeId: string,
+  startDate: string,
+  endDate: string
+): Promise<WorkReport[]> {
+  const results = await db
+    .select()
+    .from(workReports)
+    .where(
+      and(
+        eq(workReports.employeeId, employeeId),
+        sql`${workReports.date} >= ${startDate}`,
+        sql`${workReports.date} <= ${endDate}`
+      )
+    )
     .orderBy(desc(workReports.date));
   return results.map(toWorkReport);
 }

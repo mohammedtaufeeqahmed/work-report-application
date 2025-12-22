@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hashPassword, isAdmin } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { 
   getAllEmployees, 
   getEmployeesByEntity, 
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
       data: employees,
     });
   } catch (error) {
-    console.error('Get users error:', error);
+    logger.error('Get users error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch users' },
       { status: 500 }
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
       message: 'User created successfully',
     }, { status: 201 });
   } catch (error) {
-    console.error('Create user error:', error);
+    logger.error('Create user error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to create user' },
       { status: 500 }

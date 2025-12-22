@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { pool } from '@/lib/db/database';
 import { getISTNow, formatDateToIST } from '@/lib/date';
+import { logger } from '@/lib/logger';
 import type { ApiResponse } from '@/types';
 
 interface DailyStats {
@@ -130,12 +131,19 @@ export async function GET(request: NextRequest) {
       recentReports,
     };
 
-    return NextResponse.json<ApiResponse<AnalyticsData>>({
+    // Add caching headers - analytics data changes infrequently
+    const response = NextResponse.json<ApiResponse<AnalyticsData>>({
       success: true,
       data: analyticsData,
     });
+
+    // Cache for 2 minutes - analytics don't need real-time but should be reasonably fresh
+    // stale-while-revalidate allows serving stale content while fetching fresh data
+    response.headers.set('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+
+    return response;
   } catch (error) {
-    console.error('Analytics error:', error);
+    logger.error('Analytics error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch analytics' },
       { status: 500 }

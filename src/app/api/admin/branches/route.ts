@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, isSuperAdmin } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { getAllBranches, getBranchesByEntity, createBranch } from '@/lib/db/queries';
 import type { ApiResponse, Branch, CreateBranchInput } from '@/types';
 
@@ -26,12 +27,18 @@ export async function GET(request: NextRequest) {
       branches = await getAllBranches();
     }
 
-    return NextResponse.json<ApiResponse<Branch[]>>({
+    // Add caching headers - branches change infrequently but admins need to see new ones
+    const response = NextResponse.json<ApiResponse<Branch[]>>({
       success: true,
       data: branches,
     });
+    
+    // Cache for 1 minute - short enough for admin operations, long enough for performance
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    
+    return response;
   } catch (error) {
-    console.error('Get branches error:', error);
+    logger.error('Get branches error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch branches' },
       { status: 500 }
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
       message: 'Branch created successfully',
     }, { status: 201 });
   } catch (error) {
-    console.error('Create branch error:', error);
+    logger.error('Create branch error:', error);
     // Check for unique constraint violation
     if (error instanceof Error && error.message.includes('unique')) {
       return NextResponse.json<ApiResponse>(

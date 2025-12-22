@@ -525,7 +525,7 @@ export default function ManagementDashboardPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-muted/50 border-b">
-                          <th className="text-left py-3 px-3 sm:px-4 font-medium sticky left-0 z-20 bg-muted/50 backdrop-blur-sm min-w-[240px] sm:min-w-[280px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                          <th className="text-left py-3 px-3 sm:px-4 font-medium sticky left-0 z-30 bg-muted/50 min-w-[240px] sm:min-w-[280px] border-r border-border/50">
                             <span className="hidden sm:inline">Employee</span>
                             <span className="sm:hidden">Emp</span>
                           </th>
@@ -537,7 +537,7 @@ export default function ManagementDashboardPage() {
                               {day}
                             </th>
                           ))}
-                          <th className="text-center py-3 px-3 sm:px-4 font-medium sticky right-0 z-20 bg-muted/50 backdrop-blur-sm min-w-[70px] sm:min-w-[80px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                          <th className="text-center py-3 px-3 sm:px-4 font-medium sticky right-0 z-30 bg-muted/50 min-w-[70px] sm:min-w-[80px] border-l border-border/50">
                             Summary
                           </th>
                         </tr>
@@ -558,7 +558,9 @@ export default function ManagementDashboardPage() {
                               }`}
                             >
                               {/* Employee Profile Column */}
-                              <td className="py-3 px-3 sm:px-4 sticky left-0 z-10 bg-inherit min-w-[240px] sm:min-w-[280px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                              <td className={`py-3 px-3 sm:px-4 sticky left-0 z-20 min-w-[240px] sm:min-w-[280px] border-r border-border/50 ${
+                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                              }`}>
                                 <div className="flex items-center gap-2 sm:gap-3">
                                   <Avatar className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0">
                                     <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs sm:text-sm">
@@ -583,7 +585,9 @@ export default function ManagementDashboardPage() {
                               ))}
                               
                               {/* Summary Counter */}
-                              <td className="py-3 px-3 sm:px-4 text-center sticky right-0 z-10 bg-inherit min-w-[70px] sm:min-w-[80px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                              <td className={`py-3 px-3 sm:px-4 text-center sticky right-0 z-20 min-w-[70px] sm:min-w-[80px] border-l border-border/50 ${
+                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                              }`}>
                                 <span className="text-xs sm:text-sm font-semibold text-muted-foreground">
                                   {employee.submittedCount}/{totalWorkingDays || employee.workingDaysCount}
                                 </span>

@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { logger } from '../logger';
 import * as schema from './schema';
 
 // Get database URL from environment
@@ -97,7 +98,7 @@ export async function isDatabaseConnected(): Promise<boolean> {
  */
 export async function closeDatabase(): Promise<void> {
   await pool.end();
-  console.log('[DB] Database connection pool closed');
+  logger.log('[DB] Database connection pool closed');
 }
 
 /**
@@ -105,7 +106,7 @@ export async function closeDatabase(): Promise<void> {
  * Creates all required tables if they don't exist
  */
 export async function initializeDatabase(): Promise<void> {
-  console.log('[DB] Initializing database schema...');
+  logger.log('[DB] Initializing database schema...');
   
   // Create tables in order (respecting foreign key dependencies)
   await pool.query(`
@@ -257,7 +258,7 @@ export async function initializeDatabase(): Promise<void> {
     ON CONFLICT (key) DO NOTHING
   `);
 
-  console.log('[DB] Database schema initialized successfully');
+  logger.log('[DB] Database schema initialized successfully');
 }
 
 /**
@@ -269,7 +270,7 @@ export async function seedInitialData(): Promise<void> {
   // Check if we already have data
   const entityResult = await pool.query('SELECT COUNT(*) as count FROM entities');
   if (parseInt(entityResult.rows[0].count) > 0) {
-    console.log('[DB] Database already has data, skipping seed');
+    logger.log('[DB] Database already has data, skipping seed');
     return;
   }
 
@@ -295,15 +296,15 @@ export async function seedInitialData(): Promise<void> {
     ['ADMIN001', 'Super Admin', 'admin@company.com', 'Administration', hashedPassword, entityId, branchId, 'superadmin', 'active']
   );
 
-  console.log('[DB] Initial data seeded successfully');
-  console.log('[DB] Super Admin credentials: Employee ID: ADMIN001, Password: admin123');
+  logger.log('[DB] Initial data seeded successfully');
+  logger.log('[DB] Super Admin credentials: Employee ID: ADMIN001, Password: admin123');
 }
 
 /**
  * Reset database (drop and recreate)
  */
 export async function resetDatabase(): Promise<void> {
-  console.log('[DB] Resetting database...');
+  logger.log('[DB] Resetting database...');
   
   // Drop all tables in reverse order of dependencies
   await pool.query(`
@@ -321,7 +322,7 @@ export async function resetDatabase(): Promise<void> {
   await initializeDatabase();
   await seedInitialData();
   
-  console.log('[DB] Database reset complete');
+  logger.log('[DB] Database reset complete');
 }
 
 /**
@@ -330,7 +331,7 @@ export async function resetDatabase(): Promise<void> {
  */
 export function setupGracefulShutdown(): void {
   const shutdown = async (signal: string) => {
-    console.log(`[DB] Received ${signal}, closing database connection pool...`);
+    logger.log(`[DB] Received ${signal}, closing database connection pool...`);
     await closeDatabase();
     process.exit(0);
   };

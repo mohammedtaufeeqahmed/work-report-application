@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, hasRole } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { 
-  getAllEmployees,
+  getEmployeesWithFilters,
   getWorkReportsByDateRange,
   getAllEntities,
   getAllBranches,
@@ -73,22 +74,13 @@ export async function GET(request: NextRequest) {
     const startDate = formatDateString(year, month, 1);
     const endDate = formatDateString(year, month, daysInMonth);
 
-    // Get all employees
-    let employees: SafeEmployee[] = await getAllEmployees();
-
-    // Apply filters
-    if (entityId && entityId !== 'all') {
-      employees = employees.filter(e => e.entityId === parseInt(entityId));
-    }
-    if (branchId && branchId !== 'all') {
-      employees = employees.filter(e => e.branchId === parseInt(branchId));
-    }
-    if (department && department !== 'all') {
-      employees = employees.filter(e => e.department === department);
-    }
-
-    // Filter only active employees
-    employees = employees.filter(e => e.status === 'active');
+    // Get employees with filters applied at database level (much faster)
+    const employees: SafeEmployee[] = await getEmployeesWithFilters({
+      status: 'active',
+      entityId: entityId && entityId !== 'all' ? parseInt(entityId) : null,
+      branchId: branchId && branchId !== 'all' ? parseInt(branchId) : null,
+      department: department && department !== 'all' ? department : null,
+    });
 
     // Get all work reports for the month
     const workReports: WorkReport[] = await getWorkReportsByDateRange(startDate, endDate);
@@ -164,7 +156,8 @@ export async function GET(request: NextRequest) {
     const branches = await getAllBranches();
     const departments = await getAllDepartments();
 
-    return NextResponse.json<ApiResponse<MonthlyStatusResponse>>({
+    // Add caching headers - but keep it short for real-time updates
+    const response = NextResponse.json<ApiResponse<MonthlyStatusResponse>>({
       success: true,
       data: {
         employees: employeeStatuses,
@@ -176,8 +169,14 @@ export async function GET(request: NextRequest) {
         departments,
       },
     });
+
+    // Cache for 30 seconds - allows real-time updates while still benefiting from caching
+    // stale-while-revalidate allows serving stale content while fetching fresh data
+    response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=15');
+
+    return response;
   } catch (error) {
-    console.error('Fetch monthly status error:', error);
+    logger.error('Fetch monthly status error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch monthly status' },
       { status: 500 }

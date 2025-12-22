@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { 
   createWorkReport, 
   getWorkReports, 
   getWorkReportsByEmployee,
   getWorkReportsByDateRange,
+  getWorkReportsByDateRangeAndDepartments,
+  getWorkReportsByEmployeeAndDateRange,
   getWorkReportByEmployeeAndDate,
   getWorkReportCount,
   searchWorkReports,
@@ -106,24 +109,22 @@ export async function GET(request: NextRequest) {
         }
       } else if (employeeId) {
         // Filter by employee (but only if employee is in manager's departments)
-        const empReports = await getWorkReportsByEmployee(employeeId);
-        reports = empReports.filter(r => managerDeptNames.includes(r.department));
-        // Apply date filter if provided
         if (startDate && endDate) {
-          reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+          // Use optimized query with date range
+          reports = await getWorkReportsByEmployeeAndDateRange(employeeId, startDate, endDate);
+        } else {
+          const empReports = await getWorkReportsByEmployee(employeeId);
+          reports = empReports.filter(r => managerDeptNames.includes(r.department));
         }
+        // Still need to filter by department in JS for employee reports
+        reports = reports.filter(r => managerDeptNames.includes(r.department));
       } else if (startDate && endDate) {
-        // Filter by date range (filtered by manager's departments)
-        const dateReports = await getWorkReportsByDateRange(startDate, endDate);
-        reports = dateReports.filter(r => managerDeptNames.includes(r.department));
+        // Use optimized query - filter by date range AND departments at database level
+        reports = await getWorkReportsByDateRangeAndDepartments(startDate, endDate, managerDeptNames);
       } else {
         // Get all reports from manager's departments (when "all" is selected or no filter)
         const allReports = await getWorkReports(limit, offset);
         reports = allReports.filter(r => managerDeptNames.includes(r.department));
-        // Apply date filter if provided
-        if (startDate && endDate) {
-          reports = reports.filter(r => r.date >= startDate && r.date <= endDate);
-        }
       }
     } else {
       // Search functionality for admins/superadmins (no filtering)
@@ -134,12 +135,17 @@ export async function GET(request: NextRequest) {
         reports = await getWorkReportsByDepartment(department);
       } else if (employeeId) {
         // Filter by employee
-        reports = await getWorkReportsByEmployee(employeeId);
+        if (startDate && endDate) {
+          // Use optimized query with date range
+          reports = await getWorkReportsByEmployeeAndDateRange(employeeId, startDate, endDate);
+        } else {
+          reports = await getWorkReportsByEmployee(employeeId);
+        }
       } else if (startDate && endDate) {
         // Filter by date range - only managers/admins can view all reports by date
         if (!canViewAll) {
           // For regular employees, filter by their own ID within the date range
-          reports = await getWorkReportsByEmployee(session.employeeId);
+          reports = await getWorkReportsByEmployeeAndDateRange(session.employeeId, startDate, endDate);
         } else {
           reports = await getWorkReportsByDateRange(startDate, endDate);
         }
@@ -163,7 +169,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Fetch work reports error:', error);
+    logger.error('Fetch work reports error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch work reports' },
       { status: 500 }
@@ -227,7 +233,7 @@ export async function POST(request: NextRequest) {
       message: 'Work report submitted successfully',
     }, { status: 201 });
   } catch (error) {
-    console.error('Submit work report error:', error);
+    logger.error('Submit work report error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to submit work report' },
       { status: 500 }

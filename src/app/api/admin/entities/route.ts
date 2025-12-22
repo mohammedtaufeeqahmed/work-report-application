@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, isSuperAdmin } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { getAllEntities, createEntity } from '@/lib/db/queries';
 import type { ApiResponse, Entity, CreateEntityInput } from '@/types';
 
@@ -17,12 +18,18 @@ export async function GET() {
 
     const entities = await getAllEntities();
 
-    return NextResponse.json<ApiResponse<Entity[]>>({
+    // Add caching headers - entities change infrequently but admins need to see new ones
+    const response = NextResponse.json<ApiResponse<Entity[]>>({
       success: true,
       data: entities,
     });
+    
+    // Cache for 1 minute - short enough for admin operations, long enough for performance
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    
+    return response;
   } catch (error) {
-    console.error('Get entities error:', error);
+    logger.error('Get entities error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch entities' },
       { status: 500 }
@@ -60,7 +67,7 @@ export async function POST(request: NextRequest) {
       message: 'Entity created successfully',
     }, { status: 201 });
   } catch (error) {
-    console.error('Create entity error:', error);
+    logger.error('Create entity error:', error);
     // Check for unique constraint violation
     if (error instanceof Error && error.message.includes('unique')) {
       return NextResponse.json<ApiResponse>(

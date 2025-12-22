@@ -5,7 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import dynamic from 'next/dynamic';
+// Lazy load Recharts to reduce initial bundle size (~200KB saved)
+const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false });
+const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
+const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false });
+const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false });
+const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false });
 import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX, CheckCircle2, XCircle, Building2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkReport, SafeEmployee, SessionUser } from '@/types';
@@ -185,7 +195,7 @@ export default function ManagersDashboardPage() {
                 <SheetTrigger asChild>
                   <Button className="gap-2">
                     <UserX className="h-4 w-4" />
-                    Mark Absent
+                    Mark Attendance
                   </Button>
                 </SheetTrigger>
               <SheetContent className="sm:max-w-[600px] overflow-y-auto">
