@@ -74,12 +74,15 @@ export function Preloader() {
     }
 
     function resize() {
+      if (typeof window === 'undefined') return;
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     }
 
-    resize();
-    window.addEventListener('resize', resize);
+    if (typeof window !== 'undefined') {
+      resize();
+      window.addEventListener('resize', resize);
+    }
 
     const particles: Point3D[] = [];
     for (let i = 0; i < numParticles; i++) {
@@ -135,7 +138,9 @@ export function Preloader() {
     animate();
 
     return () => {
-      window.removeEventListener('resize', resize);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', resize);
+      }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
