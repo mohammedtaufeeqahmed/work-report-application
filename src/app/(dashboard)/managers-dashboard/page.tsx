@@ -7,15 +7,12 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import dynamic from 'next/dynamic';
 // Lazy load Recharts to reduce initial bundle size (~200KB saved)
+// Import child components normally as they're small and used within chart containers
+import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell } from 'recharts';
+// Dynamically import only the large chart container components
 const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false });
-const Bar = dynamic(() => import('recharts').then(mod => mod.Bar), { ssr: false });
-const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
-const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
-const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
 const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
 const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false });
-const Pie = dynamic(() => import('recharts').then(mod => mod.Pie), { ssr: false });
-const Cell = dynamic(() => import('recharts').then(mod => mod.Cell), { ssr: false });
 import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX, CheckCircle2, XCircle, Building2, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkReport, SafeEmployee, SessionUser } from '@/types';

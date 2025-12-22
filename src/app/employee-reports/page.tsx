@@ -834,7 +834,7 @@ export default function EmployeeReportsPage() {
                             {(() => {
                               const reportsByDate = groupReportsByDate(reports);
                               const allDates = getAllDatesInRange(dateRange.start, dateRange.end);
-                              const deptColor = managerDepartments[0] ? departmentColors.get(managerDepartments[0].name) : null;
+                              const deptColor = managerDepartments[0] ? departmentColors.get(managerDepartments[0].name) : undefined;
                               
                               return allDates.map(date => {
                                 const dateReports = reportsByDate[date] || [];
