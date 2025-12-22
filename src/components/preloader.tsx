@@ -74,7 +74,7 @@ export function Preloader() {
     }
 
     function resize() {
-      if (typeof window === 'undefined') return;
+      if (typeof window === 'undefined' || !canvas) return;
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     }
@@ -167,7 +167,9 @@ export function Preloader() {
 
       container.appendChild(line);
 
-      if (container.children.length > 6) container.removeChild(container.firstChild);
+      if (container.children.length > 6 && container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
 
     const leftInterval = setInterval(() => addLogLine(leftLog, 'left'), 400);
