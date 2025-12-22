@@ -7,8 +7,8 @@ export function Preloader() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('INITIALIZING');
   const [isComplete, setIsComplete] = useState(false);
-  const animationFrameRef = useRef<number>();
-  const progressFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const progressFrameRef = useRef<number | undefined>(undefined);
 
   const states = [
     'INITIALIZING CORE',
