@@ -3,25 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import dynamic from 'next/dynamic';
-// Lazy load Recharts to reduce initial bundle size (~200KB saved)
-// Import child components normally as they're small and used within chart containers
-import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell } from 'recharts';
-// Dynamically import only the large chart container components
-const BarChart = dynamic(() => import('recharts').then(mod => mod.BarChart), { ssr: false });
-const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
-const PieChart = dynamic(() => import('recharts').then(mod => mod.PieChart), { ssr: false });
-import { Loader2, Search, Users, Calendar, FileText, Filter, Shield, UserX, CheckCircle2, XCircle, Building2, UserCheck } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Loader2, Search, Users, Calendar, Filter, Shield, UserX, CheckCircle2, Building2, UserCheck, AlertCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { WorkReport, SafeEmployee, SessionUser } from '@/types';
-import { getISTDateRangeFromDays, getISTTodayDateString, getFullDateIST } from '@/lib/date';
-
-const chartConfig = {
-  working: { label: 'Working', color: '#22c55e' },
-  leave: { label: 'Leave', color: '#f59e0b' },
-} satisfies ChartConfig;
+import type { WorkReport, SafeEmployee, SessionUser, Department } from '@/types';
+import { getISTDateRangeFromDays, getISTTodayDateString, getFullDateIST, getShortDayIST, getShortDateIST, convertUTCToISTDate, getISTTodayRange } from '@/lib/date';
 
 export default function ManagersDashboardPage() {
   const [loading, setLoading] = useState(false);
@@ -31,25 +17,62 @@ export default function ManagersDashboardPage() {
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [markingAbsent, setMarkingAbsent] = useState<string | null>(null);
   const [absentDate, setAbsentDate] = useState(getISTTodayDateString());
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'leave'>('all');
   const [recentlyMarked, setRecentlyMarked] = useState<Set<string>>(new Set());
-  // Use IST for date range (last 7 days)
+  const [managerDepartments, setManagerDepartments] = useState<Department[]>([]);
+  const [departmentColors, setDepartmentColors] = useState<Map<string, { solid: string; gradient: string; border: string; text: string }>>(new Map());
+  const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
+  
+  // Use IST for date range (default to last 7 days for managers)
   const [dateRange, setDateRange] = useState(getISTDateRangeFromDays(7));
+
+  // Color allocation system - Pastel colors
+  const getDepartmentColor = (departmentName: string, index: number) => {
+    const colors = [
+      { solid: 'bg-pink-50 dark:bg-pink-950/30', gradient: 'from-pink-50 to-pink-100 dark:from-pink-950/30 dark:to-pink-900/30', border: 'border-pink-200 dark:border-pink-800', text: 'text-pink-900 dark:text-pink-200' },
+      { solid: 'bg-purple-50 dark:bg-purple-950/30', gradient: 'from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30', border: 'border-purple-200 dark:border-purple-800', text: 'text-purple-900 dark:text-purple-200' },
+      { solid: 'bg-blue-50 dark:bg-blue-950/30', gradient: 'from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-900 dark:text-blue-200' },
+      { solid: 'bg-green-50 dark:bg-green-950/30', gradient: 'from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-900/30', border: 'border-green-200 dark:border-green-800', text: 'text-green-900 dark:text-green-200' },
+      { solid: 'bg-yellow-50 dark:bg-yellow-950/30', gradient: 'from-yellow-50 to-yellow-100 dark:from-yellow-950/30 dark:to-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-800', text: 'text-yellow-900 dark:text-yellow-200' },
+      { solid: 'bg-orange-50 dark:bg-orange-950/30', gradient: 'from-orange-50 to-orange-100 dark:from-orange-950/30 dark:to-orange-900/30', border: 'border-orange-200 dark:border-orange-800', text: 'text-orange-900 dark:text-orange-200' },
+      { solid: 'bg-cyan-50 dark:bg-cyan-950/30', gradient: 'from-cyan-50 to-cyan-100 dark:from-cyan-950/30 dark:to-cyan-900/30', border: 'border-cyan-200 dark:border-cyan-800', text: 'text-cyan-900 dark:text-cyan-200' },
+      { solid: 'bg-indigo-50 dark:bg-indigo-950/30', gradient: 'from-indigo-50 to-indigo-100 dark:from-indigo-950/30 dark:to-indigo-900/30', border: 'border-indigo-200 dark:border-indigo-800', text: 'text-indigo-900 dark:text-indigo-200' },
+    ];
+    return colors[index % colors.length];
+  };
+
+  // Initialize department colors
+  useEffect(() => {
+    if (managerDepartments.length > 0) {
+      const colorMap = new Map<string, { solid: string; gradient: string; border: string; text: string }>();
+      managerDepartments.forEach((dept, index) => {
+        colorMap.set(dept.name, getDepartmentColor(dept.name, index));
+      });
+      setDepartmentColors(colorMap);
+    }
+  }, [managerDepartments]);
 
   useEffect(() => {
     fetchSession();
-    fetchReports();
-    fetchTeamEmployees();
+    fetchManagerDepartments();
   }, []);
 
   useEffect(() => {
-    if (sheetOpen) {
+    if (dateRange.start && dateRange.end && managerDepartments.length > 0) {
+      fetchReports();
+    }
+  }, [dateRange, managerDepartments]);
+
+  useEffect(() => {
+    if (dialogOpen) {
       fetchTeamEmployees();
     }
-  }, [sheetOpen]);
+  }, [dialogOpen]);
 
   const fetchSession = async () => {
     try {
@@ -63,12 +86,31 @@ export default function ManagersDashboardPage() {
     }
   };
 
+  const fetchManagerDepartments = async () => {
+    try {
+      const response = await fetch('/api/managers/departments');
+      const data = await response.json();
+      if (data.success && data.data) {
+        setManagerDepartments(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch manager departments:', error);
+    }
+  };
+
   const fetchReports = async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/work-reports?startDate=${dateRange.start}&endDate=${dateRange.end}`);
       const data = await response.json();
-      if (data.success) setReports(data.data.reports || []);
+      if (data.success) {
+        // Filter reports by manager's departments
+        const deptNames = managerDepartments.map(d => d.name);
+        const filtered = (data.data.reports || []).filter((r: WorkReport) => 
+          deptNames.includes(r.department)
+        );
+        setReports(filtered);
+      }
     } catch (error) {
       console.error('Failed to fetch reports:', error);
     } finally {
@@ -127,42 +169,124 @@ export default function ManagersDashboardPage() {
     }
   };
 
-  const filteredReports = reports.filter(report =>
-    report.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const isLateSubmission = (report: WorkReport) => {
+    const submissionDate = convertUTCToISTDate(report.createdAt);
+    return report.date < submissionDate;
+  };
 
-  const workingCount = filteredReports.filter(r => r.status === 'working').length;
-  // Treat absent as leave - combine both counts
-  const leaveCount = filteredReports.filter(r => r.status === 'leave' || r.status === 'absent').length;
-  const onDutyCount = filteredReports.filter(r => r.onDuty).length;
+  const toggleExpand = (reportId: number) => {
+    setExpandedReportId(expandedReportId === reportId ? null : reportId);
+  };
 
-  const departmentData = filteredReports.reduce((acc, report) => {
-    const dept = report.department;
-    if (!acc[dept]) acc[dept] = { department: dept, working: 0, leave: 0 };
-    if (report.status === 'working') acc[dept].working++;
-    else if (report.status === 'leave' || report.status === 'absent') acc[dept].leave++;
-    return acc;
-  }, {} as Record<string, { department: string; working: number; leave: number }>);
+  // Filter reports based on search, status, and department
+  const getFilteredReports = () => {
+    let filtered = reports;
 
-  const chartData = Object.values(departmentData);
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(r => 
+        r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.workReport || '').toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
 
-  const pieData = [
-    { name: 'Working', value: workingCount, color: '#22c55e' },
-    { name: 'Leave', value: leaveCount, color: '#f59e0b' },
-  ];
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(r => r.status === statusFilter);
+    }
 
-  const employeeSummary = filteredReports.reduce((acc, report) => {
-    const key = report.employeeId;
-    if (!acc[key]) acc[key] = { employeeId: key, name: report.name, department: report.department, working: 0, leave: 0, onDuty: 0 };
-    if (report.status === 'working') acc[key].working++;
-    else if (report.status === 'leave' || report.status === 'absent') acc[key].leave++;
-    if (report.onDuty) acc[key].onDuty++;
-    return acc;
-  }, {} as Record<string, { employeeId: string; name: string; department: string; working: number; leave: number; onDuty: number }>);
+    // Department filter
+    if (selectedDepartment !== 'all') {
+      filtered = filtered.filter(r => r.department === selectedDepartment);
+    }
 
-  const employeeData = Object.values(employeeSummary).sort((a, b) => (b.working + b.leave) - (a.working + a.leave));
+    return filtered;
+  };
+
+  // Group reports by department for Scrum board columns
+  const groupReportsByDepartment = (reports: WorkReport[]) => {
+    const grouped: Record<string, WorkReport[]> = {};
+    managerDepartments.forEach(dept => {
+      grouped[dept.name] = reports.filter(r => r.department === dept.name);
+    });
+    return grouped;
+  };
+
+  // WorkReportCard Component
+  const WorkReportCard = ({ report }: { report: WorkReport }) => {
+    return (
+      <div
+        onClick={() => toggleExpand(report.id)}
+        className={`group relative p-3 rounded-lg border bg-card hover:shadow-md transition-all cursor-pointer mb-2 ${
+          expandedReportId === report.id ? 'ring-2 ring-primary' : ''
+        }`}
+      >
+        <div className="flex items-start gap-2">
+          {/* Employee Avatar */}
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold flex-shrink-0">
+            {report.name?.charAt(0) || 'E'}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            {/* Employee Name & ID */}
+            <div className="mb-2">
+              <p className="text-sm font-semibold truncate">{report.name}</p>
+              <p className="text-xs text-muted-foreground truncate font-mono">{report.employeeId}</p>
+            </div>
+            
+            {/* Date */}
+            <div className="mb-2">
+              <p className="text-xs text-muted-foreground">
+                {getShortDayIST(report.date)} {getShortDateIST(report.date)}
+              </p>
+            </div>
+            
+            {/* Status Badge */}
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                report.status === 'working' 
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' 
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400'
+              }`}>
+                {report.status === 'working' ? 'Working' : 'Leave'}
+              </span>
+              
+              {/* On Duty Badge */}
+              {report.onDuty && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
+                  <Shield className="h-3 w-3" />
+                  On Duty
+                </span>
+              )}
+              
+              {/* Late Submission Badge */}
+              {isLateSubmission(report) && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400">
+                  <AlertCircle className="h-3 w-3" />
+                  Late
+                </span>
+              )}
+            </div>
+            
+            {/* Work Report Preview */}
+            {report.workReport && expandedReportId !== report.id && (
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {report.workReport}
+              </p>
+            )}
+            
+            {/* Expanded Content */}
+            {expandedReportId === report.id && report.workReport && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{report.workReport}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Filter employees for the mark absent modal
   const filteredEmployees = teamEmployees.filter(emp => {
@@ -177,38 +301,37 @@ export default function ManagersDashboardPage() {
   // Get unique departments for filter
   const departments = Array.from(new Set(teamEmployees.map(emp => emp.department))).sort();
 
+  const filteredReports = getFilteredReports();
+  const reportsByDepartment = groupReportsByDepartment(filteredReports);
+
   return (
-    <div className="min-h-screen pt-14">
-      <div className="container py-8 px-4 md:px-6">
-        <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen pt-14 bg-muted/20">
+      <div className="container py-6 px-4 md:px-6">
+        <div className="max-w-full mx-auto">
           {/* Header */}
-          <div className="mb-8 flex justify-between items-center">
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-2xl font-bold">Managers Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Team work report analytics</p>
+              <p className="text-sm text-muted-foreground">Scrum board view for team work reports</p>
             </div>
             {user?.pageAccess?.mark_attendance && (
-              <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-                <SheetTrigger asChild>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
                   <Button className="gap-2">
                     <UserX className="h-4 w-4" />
                     Mark Attendance
                   </Button>
-                </SheetTrigger>
-              <SheetContent className="sm:max-w-[600px] overflow-y-auto">
-                <SheetHeader>
-                  <SheetTitle className="flex items-center gap-2">
+                </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
                     <UserX className="h-5 w-5" />
                     Mark Employee as Absent
-                  </SheetTitle>
-                  <SheetDescription>
-                    {user?.role === 'manager'
-                      ? 'Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.'
-                      : user?.department === 'Operations'
-                      ? 'Select an employee and date to mark them as absent. You can mark employees from your assigned departments or all employees if no departments are assigned.'
-                      : 'Select an employee and date to mark them as absent.'}
-                  </SheetDescription>
-                </SheetHeader>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.
+                  </DialogDescription>
+                </DialogHeader>
                 
                 <div className="mt-6 space-y-6">
                   {/* Date Selection */}
@@ -288,9 +411,7 @@ export default function ManagersDashboardPage() {
                       <div>
                         <p className="text-sm font-medium">No employees found</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {user?.role === 'manager'
-                            ? 'No employees are assigned to your departments yet.'
-                            : 'No employees available to mark as absent.'}
+                          No employees are assigned to your departments yet.
                         </p>
                       </div>
                     </div>
@@ -368,171 +489,207 @@ export default function ManagersDashboardPage() {
                     </div>
                   )}
                 </div>
-              </SheetContent>
-            </Sheet>
+              </DialogContent>
+            </Dialog>
             )}
           </div>
 
-          {/* Filters */}
-          <div className="border rounded-lg p-4 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search..."
-                  className="pl-9"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+          {/* Filters Panel */}
+          {showFilters && (
+            <div className="mb-6 border rounded-lg bg-card p-4 shadow-sm">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filters
+                  </h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowFilters(false)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search reports..."
+                      className="pl-9"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Date Range Start */}
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Start Date</label>
+                    <Input
+                      type="date"
+                      value={dateRange.start}
+                      onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Date Range End */}
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">End Date</label>
+                    <Input
+                      type="date"
+                      value={dateRange.end}
+                      onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as 'all' | 'working' | 'leave')}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="working">Working</option>
+                      <option value="leave">Leave</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Quick Date Range Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange(getISTTodayRange())}
+                    className="text-xs"
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange(getISTDateRangeFromDays(7))}
+                    className="text-xs"
+                  >
+                    Last 7 Days
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange(getISTDateRangeFromDays(14))}
+                    className="text-xs"
+                  >
+                    Last 14 Days
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateRange(getISTDateRangeFromDays(30))}
+                    className="text-xs"
+                  >
+                    Last 30 Days
+                  </Button>
+                  {(searchTerm || statusFilter !== 'all' || selectedDepartment !== 'all') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSearchTerm('');
+                        setStatusFilter('all');
+                        setSelectedDepartment('all');
+                      }}
+                      className="text-xs"
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
               </div>
-              <Input
-                type="date"
-                value={dateRange.start}
-                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                className="w-auto"
-              />
-              <Input
-                type="date"
-                value={dateRange.end}
-                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                className="w-auto"
-              />
-              <Button onClick={fetchReports} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter className="h-4 w-4 mr-2" />}
-                Apply
+            </div>
+          )}
+
+          {!showFilters && (
+            <div className="mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(true)}
+                className="gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Show Filters
               </Button>
             </div>
-          </div>
+          )}
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-            <div className="border rounded-lg p-4">
-              <FileText className="h-4 w-4 text-muted-foreground mb-2" />
-              <p className="text-2xl font-bold">{filteredReports.length}</p>
-              <p className="text-xs text-muted-foreground">Total Reports</p>
+          {/* Scrum Board */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-            <div className="border rounded-lg p-4">
-              <Calendar className="h-4 w-4 text-green-600 mb-2" />
-              <p className="text-2xl font-bold text-green-600">{workingCount}</p>
-              <p className="text-xs text-muted-foreground">Working Days</p>
+          ) : managerDepartments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Building2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-sm font-medium">No departments assigned</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please contact an administrator to assign departments to your account.
+              </p>
             </div>
-            <div className="border rounded-lg p-4 bg-blue-50/50 dark:bg-blue-950/20">
-              <Shield className="h-4 w-4 text-blue-600 mb-2" />
-              <p className="text-2xl font-bold text-blue-600">{onDutyCount}</p>
-              <p className="text-xs text-muted-foreground">On Duty</p>
-            </div>
-            <div className="border rounded-lg p-4">
-              <Calendar className="h-4 w-4 text-amber-600 mb-2" />
-              <p className="text-2xl font-bold text-amber-600">{leaveCount}</p>
-              <p className="text-xs text-muted-foreground">Leave Days</p>
-            </div>
-            <div className="border rounded-lg p-4">
-              <Users className="h-4 w-4 text-muted-foreground mb-2" />
-              <p className="text-2xl font-bold">{Object.keys(employeeSummary).length}</p>
-              <p className="text-xs text-muted-foreground">Employees</p>
-            </div>
-          </div>
-
-          {/* Charts */}
-          <div className="grid lg:grid-cols-2 gap-6 mb-8">
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-4">By Department</h3>
-              {chartData.length > 0 ? (
-                <ChartContainer config={chartConfig} className="h-64 w-full">
-                  <BarChart data={chartData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis type="number" tick={{ fontSize: 12 }} />
-                    <YAxis dataKey="department" type="category" tick={{ fontSize: 12 }} width={80} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="working" fill="#22c55e" stackId="a" />
-                    <Bar dataKey="leave" fill="#f59e0b" stackId="a" />
-                  </BarChart>
-                </ChartContainer>
-              ) : (
-                <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
-              )}
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-4">Status Distribution</h3>
-              {filteredReports.length > 0 ? (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {pieData.map((entry, index) => (
-                          <Cell key={index} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
-              )}
-            </div>
-          </div>
-
-          {/* Employee Summary */}
-          <div className="border rounded-lg">
-            <div className="p-4 border-b">
-              <h3 className="font-semibold">Employee Summary</h3>
-            </div>
-            {employeeData.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left py-3 px-4 text-sm font-medium">Employee</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium hidden md:table-cell">Department</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium">Working</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium">On Duty</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium">Leave</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium">Total</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium">Attendance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {employeeData.slice(0, 10).map((emp) => {
-                      const total = emp.working + emp.leave;
-                      const attendance = total > 0 ? Math.round((emp.working / total) * 100) : 0;
-                      return (
-                        <tr key={emp.employeeId} className="hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <p className="font-medium text-sm">{emp.name}</p>
-                            <p className="text-xs text-muted-foreground">{emp.employeeId}</p>
-                          </td>
-                          <td className="py-3 px-4 hidden md:table-cell text-sm">{emp.department}</td>
-                          <td className="py-3 px-4 text-center text-sm text-green-600 font-medium">{emp.working}</td>
-                          <td className="py-3 px-4 text-center text-sm text-blue-600 font-medium">{emp.onDuty}</td>
-                          <td className="py-3 px-4 text-center text-sm text-amber-600 font-medium">{emp.leave}</td>
-                          <td className="py-3 px-4 text-center text-sm font-medium">{total}</td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={`text-xs px-2 py-1 rounded font-medium ${
-                              attendance >= 80 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
-                              attendance >= 60 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
-                              'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                            }`}>
-                              {attendance}%
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          ) : (
+            <div className="overflow-x-auto pb-4">
+              <div className="flex gap-4 min-w-max">
+                {managerDepartments.map(dept => {
+                  const colorScheme = departmentColors.get(dept.name);
+                  const deptReports = reportsByDepartment[dept.name] || [];
+                  
+                  return (
+                    <div
+                      key={dept.id}
+                      className={`flex-shrink-0 w-80 rounded-lg border-2 ${colorScheme?.border || 'border-border'} ${colorScheme?.solid || 'bg-card'}`}
+                    >
+                      {/* Column Header */}
+                      <div className={`p-4 rounded-t-lg border-b-2 ${colorScheme?.border || 'border-border'} ${
+                        colorScheme?.gradient 
+                          ? `bg-gradient-to-b ${colorScheme.gradient}` 
+                          : colorScheme?.solid || 'bg-muted'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <h3 className={`font-semibold text-sm ${colorScheme?.text || 'text-foreground'}`}>
+                            {dept.name}
+                          </h3>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            colorScheme?.text || 'text-muted-foreground'
+                          } bg-background/50`}>
+                            {deptReports.length}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Column Content */}
+                      <div className="p-3 min-h-[400px] max-h-[calc(100vh-300px)] overflow-y-auto">
+                        {deptReports.length === 0 ? (
+                          <div className="flex items-center justify-center py-8 text-center">
+                            <p className="text-xs text-muted-foreground">No reports</p>
+                          </div>
+                        ) : (
+                          deptReports.map(report => (
+                            <WorkReportCard key={report.id} report={report} />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="p-8 text-center text-muted-foreground">No employee data</div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,13 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Syncopate, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
+import { Preloader } from "@/components/preloader";
 import "./globals.css";
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+});
+
+const syncopate = Syncopate({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-syncopate",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  weight: ["200", "400"],
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -46,7 +61,8 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/logo_96x96.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/logo_72x72.png" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased min-h-screen bg-background`}>
+      <body className={`${inter.variable} ${syncopate.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background`}>
+        <Preloader />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

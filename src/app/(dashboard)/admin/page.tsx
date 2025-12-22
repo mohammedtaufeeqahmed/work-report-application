@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Plus, Users, Search, Pencil, Trash2, X, Key, Upload, Download, FileJson, FileSpreadsheet, Check, Filter, UserX, UserCheck, CheckCircle2, Calendar, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SafeEmployee, SessionUser, Department } from '@/types';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { getISTTodayDateString, getFullDateIST } from '@/lib/date';
 import type { SafeEmployee as SafeEmployeeType } from '@/types';
 
@@ -54,7 +54,7 @@ export default function AdminPage() {
   // Mark Absent state
   const [markingAbsent, setMarkingAbsent] = useState<string | null>(null);
   const [absentDate, setAbsentDate] = useState(getISTTodayDateString());
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [teamEmployees, setTeamEmployees] = useState<SafeEmployeeType[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
@@ -68,10 +68,10 @@ export default function AdminPage() {
 
   // Fetch team employees when sheet opens
   useEffect(() => {
-    if (sheetOpen && session?.pageAccess?.mark_attendance) {
+    if (dialogOpen && session?.pageAccess?.mark_attendance) {
       fetchTeamEmployees();
     }
-  }, [sheetOpen, session]);
+  }, [dialogOpen, session]);
 
   const fetchSession = async () => {
     try {
@@ -696,27 +696,27 @@ export default function AdminPage() {
                 Bulk Upload
               </Button>
               {session?.pageAccess?.mark_attendance && (
-                <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-                  <SheetTrigger asChild>
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                  <DialogTrigger asChild>
                     <Button className="gap-2">
                       <UserX className="h-4 w-4" />
                       Mark Attendance
                     </Button>
-                  </SheetTrigger>
-                  <SheetContent className="sm:max-w-[600px] overflow-y-auto">
-                    <SheetHeader>
-                      <SheetTitle className="flex items-center gap-2">
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
                         <UserX className="h-5 w-5" />
                         Mark Employee as Absent
-                      </SheetTitle>
-                      <SheetDescription>
+                      </DialogTitle>
+                      <DialogDescription>
                         {session?.role === 'manager'
                           ? 'Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.'
                           : session?.department === 'Operations'
                           ? 'Select an employee and date to mark them as absent. You can mark employees from your assigned departments or all employees if no departments are assigned.'
                           : 'Select an employee and date to mark them as absent.'}
-                      </SheetDescription>
-                    </SheetHeader>
+                      </DialogDescription>
+                    </DialogHeader>
                     
                     <div className="mt-6 space-y-6">
                       {/* Date Selection */}
@@ -876,8 +876,8 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
-                  </SheetContent>
-                </Sheet>
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
           </div>
