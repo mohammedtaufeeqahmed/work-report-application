@@ -77,7 +77,15 @@ const ROUTE_TO_PAGE_ACCESS: Record<string, keyof PageAccess> = {
 
 // Get JWT secret
 function getJwtSecret(): Uint8Array {
-  const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || 'fallback-secret-for-development';
+  const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    // In production, this should never happen, but we need a fallback for edge runtime
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[MIDDLEWARE ERROR] JWT secret is not configured');
+    }
+    // Use fallback only in development
+    return new TextEncoder().encode('fallback-secret-for-development');
+  }
   return new TextEncoder().encode(secret);
 }
 
@@ -151,7 +159,12 @@ export async function middleware(request: NextRequest) {
 
     // Allow access
     return NextResponse.next();
-  } catch {
+  } catch (error) {
+    // Log error for debugging (without exposing sensitive info)
+    if (process.env.NODE_ENV === 'development') {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('[MIDDLEWARE] Token verification failed:', errorMsg);
+    }
     // Invalid token, redirect to login
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);

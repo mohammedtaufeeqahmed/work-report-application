@@ -14,7 +14,15 @@ const SESSION_EXPIRY_DAYS = 7;
 function getJwtSecret(): Uint8Array {
   const secret = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error('JWT secret is not configured. Set NEXTAUTH_SECRET or JWT_SECRET in environment variables.');
+    const errorMsg = 'JWT secret is not configured. Set NEXTAUTH_SECRET or JWT_SECRET in environment variables.';
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[AUTH ERROR]', errorMsg);
+      throw new Error(errorMsg);
+    } else {
+      console.warn('[AUTH WARNING]', errorMsg, '- Using fallback secret for development');
+      // Use a fallback in development only
+      return new TextEncoder().encode('fallback-secret-for-development-only');
+    }
   }
   return new TextEncoder().encode(secret);
 }
@@ -81,7 +89,11 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       branchId: payload.branchId as number | null,
       pageAccess: payload.pageAccess as PageAccess | null,
     };
-  } catch {
+  } catch (error) {
+    // Log error in development for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[AUTH] Token verification failed:', error instanceof Error ? error.message : 'Unknown error');
+    }
     return null;
   }
 }
@@ -118,24 +130,55 @@ export async function authenticateUser(credentials: LoginCredentials): Promise<{
  * Set session cookie
  */
 export async function setSessionCookie(user: SessionUser): Promise<void> {
-  const token = await createSessionToken(user);
-  const cookieStore = await cookies();
-  
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
+  try {
+    const token = await createSessionToken(user);
+    const cookieStore = await cookies();
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
 
-  // Use secure cookies when running over HTTPS (production with Cloudflare)
-  // Check if we're in production and using HTTPS
-  const isSecure = process.env.NODE_ENV === 'production' || 
-                   process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://');
+    // Determine if we're in production with HTTPS
+    // Check multiple indicators for production HTTPS environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const hasHttpsUrl = process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://');
+    const isSecure = isProduction || hasHttpsUrl;
 
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: 'lax',
-    expires: expiresAt,
-    path: '/',
-  });
+    // For production behind reverse proxy (nginx/Cloudflare), use 'none' with secure
+    // This allows cookies to work across different subdomains if needed
+    const sameSite = isProduction && isSecure ? 'none' : 'lax';
+
+    // Get domain from environment if set (for subdomain scenarios)
+    const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+
+    const cookieOptions: Parameters<typeof cookieStore.set>[2] = {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: sameSite as 'lax' | 'strict' | 'none',
+      expires: expiresAt,
+      path: '/',
+    };
+
+    // Only set domain if explicitly configured (avoid issues with localhost)
+    if (cookieDomain && cookieDomain !== 'localhost') {
+      cookieOptions.domain = cookieDomain;
+    }
+
+    cookieStore.set(SESSION_COOKIE_NAME, token, cookieOptions);
+
+    // Log in development for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AUTH] Session cookie set:', {
+        secure: isSecure,
+        sameSite,
+        domain: cookieDomain || 'default',
+        expires: expiresAt.toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error('[AUTH ERROR] Failed to set session cookie:', error);
+    // Re-throw to allow caller to handle
+    throw error;
+  }
 }
 
 /**

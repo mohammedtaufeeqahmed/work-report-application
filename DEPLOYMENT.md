@@ -42,22 +42,48 @@ Create a `.env.production` file in the root directory with the following variabl
 NODE_ENV=production
 PORT=3000
 
-# JWT Secret (Generate a secure random string)
+# JWT Secret (REQUIRED - Generate a secure random string)
+# This is critical for authentication. Must be set in production.
+# Generate using: openssl rand -base64 32
 JWT_SECRET=your-super-secure-jwt-secret-key-min-32-chars
+
+# Alternative JWT Secret (if using NextAuth naming convention)
+# NEXTAUTH_SECRET=your-super-secure-jwt-secret-key-min-32-chars
 
 # Database
 DATABASE_PATH=./data/workreport.db
+
+# Application URL (REQUIRED for production)
+# Must be the full HTTPS URL of your deployed application
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+# Cookie Domain (Optional - only set if using subdomains)
+# Example: .your-domain.com (note the leading dot for subdomain support)
+# Leave unset for default behavior
+# COOKIE_DOMAIN=.your-domain.com
 
 # Google Sheets Integration (Optional)
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 GOOGLE_SPREADSHEET_ID=your-spreadsheet-id
 
-# Base URL (Update with your domain)
+# Base URL (Legacy - use NEXT_PUBLIC_APP_URL instead)
 NEXT_PUBLIC_BASE_URL=https://your-domain.com
 ```
 
 > ⚠️ **Security Note**: Never commit `.env.production` to version control. Generate a strong JWT_SECRET using: `openssl rand -base64 32`
+
+### Required Environment Variables
+
+The following environment variables are **REQUIRED** for production:
+
+1. **JWT_SECRET** or **NEXTAUTH_SECRET**: Used for signing and verifying authentication tokens
+2. **NEXT_PUBLIC_APP_URL**: Full HTTPS URL of your application (e.g., `https://workreport.example.com`)
+
+### Optional Environment Variables
+
+- **COOKIE_DOMAIN**: Only set if you need cookies to work across subdomains (e.g., `.example.com`)
+- **NEXT_PUBLIC_BASE_URL**: Legacy variable, use `NEXT_PUBLIC_APP_URL` instead
 
 ---
 
@@ -461,6 +487,91 @@ fuser /var/www/work-report-app/data/workreport.db
 # Ensure only one instance is running
 pm2 delete all
 pm2 start ecosystem.config.js --env production
+```
+
+#### 6. Authentication Errors (401/403)
+
+If you're experiencing authentication errors after deployment:
+
+**Check JWT Secret:**
+```bash
+# Verify JWT_SECRET is set
+echo $JWT_SECRET
+
+# If not set, add to .env.production
+echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env.production
+```
+
+**Check Cookie Settings:**
+- Verify `NEXT_PUBLIC_APP_URL` is set to your HTTPS URL
+- Check browser DevTools → Application → Cookies to see if session cookie is set
+- Verify cookie attributes: `Secure`, `HttpOnly`, `SameSite`
+
+**Common Cookie Issues:**
+
+1. **Cookies not being set:**
+   - Ensure `NEXT_PUBLIC_APP_URL` starts with `https://`
+   - Check if behind reverse proxy (nginx/Cloudflare) - may need `COOKIE_DOMAIN` set
+   - Verify HTTPS is properly configured
+
+2. **Cookies not persisting:**
+   - Check browser console for cookie warnings
+   - Verify `SameSite` attribute (should be `none` in production with HTTPS)
+   - Check if third-party cookies are blocked in browser
+
+3. **403 Forbidden on login:**
+   - Check server logs for JWT secret errors
+   - Verify environment variables are loaded correctly
+   - Restart application after setting environment variables
+
+**Nginx Configuration for Cookies:**
+
+If using nginx as reverse proxy, ensure these headers are forwarded:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+**Cloudflare Configuration:**
+
+If using Cloudflare:
+- Ensure SSL/TLS mode is set to "Full" or "Full (strict)"
+- Disable "Always Use HTTPS" if causing redirect loops
+- Check "Cookie Security" settings in Cloudflare dashboard
+
+**Debug Steps:**
+
+1. Check server logs for authentication errors:
+```bash
+pm2 logs work-report-app --lines 50 | grep -i "auth\|jwt\|cookie"
+```
+
+2. Test login endpoint directly:
+```bash
+curl -X POST https://your-domain.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"employeeId":"TEST","password":"test"}' \
+  -v
+```
+
+3. Check if session cookie is returned in response headers
+
+#### 7. Environment Variables Not Loading
+
+```bash
+# Verify environment variables are set
+pm2 env work-report-app
+
+# Or for Docker
+docker exec work-report-app env | grep JWT_SECRET
+
+# Restart after setting variables
+pm2 restart work-report-app
+# Or
+docker-compose restart
 ```
 
 ### Health Check Endpoint

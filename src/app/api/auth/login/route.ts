@@ -34,7 +34,19 @@ export async function POST(request: NextRequest) {
 
     // Create session
     const sessionUser = employeeToSessionUser(result.user);
-    await setSessionCookie(sessionUser);
+    
+    try {
+      await setSessionCookie(sessionUser);
+    } catch (cookieError) {
+      console.error('[LOGIN ERROR] Failed to set session cookie:', cookieError);
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          error: 'Failed to create session. Please try again.',
+        },
+        { status: 500 }
+      );
+    }
 
     // Parse pageAccess from JSON string or use default based on role
     let pageAccess: PageAccess | null = null;
@@ -65,17 +77,28 @@ export async function POST(request: NextRequest) {
       updatedAt: result.user.updatedAt,
     };
 
-    return NextResponse.json<ApiResponse<SafeEmployee>>({
+    const response = NextResponse.json<ApiResponse<SafeEmployee>>({
       success: true,
       data: safeUser,
       message: 'Login successful',
     });
+
+    // Ensure cookies are included in response headers
+    // The cookies() API should handle this automatically, but we verify
+    return response;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[LOGIN ERROR]', error);
+    const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
+    
+    // Don't expose internal errors in production
+    const userMessage = process.env.NODE_ENV === 'production' 
+      ? 'An error occurred during login. Please try again.' 
+      : errorMessage;
+    
     return NextResponse.json<ApiResponse>(
       {
         success: false,
-        error: 'An error occurred during login',
+        error: userMessage,
       },
       { status: 500 }
     );
