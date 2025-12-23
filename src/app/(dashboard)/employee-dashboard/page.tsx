@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Loader2, 
   FileText, 
@@ -19,7 +18,14 @@ import {
   Plus,
   ChevronDown,
   AlertCircle,
-  Shield
+  Shield,
+  Clock,
+  CheckCircle2,
+  CalendarDays,
+  ArrowRight,
+  Lock,
+  Sparkles,
+  Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -42,19 +48,16 @@ export default function EmployeeDashboardPage() {
   // Expanded report state
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
 
-  // Check if user can edit their own reports (applies to both employees and managers)
+  // Check if user can edit their own reports
   const canEditOwnReports = editPermissions?.employee_can_edit_own_reports || false;
 
   // Check if a report can be edited (only on the same day it was created)
-  const canEditReport = (report: WorkReport) => {
+  const canEditReport = useCallback((report: WorkReport) => {
     if (!canEditOwnReports) return false;
-    
-    // Convert UTC createdAt to IST date and compare with today in IST
     const createdDate = convertUTCToISTDate(report.createdAt);
     const todayDate = getISTTodayDateString();
-    
     return createdDate === todayDate;
-  };
+  }, [canEditOwnReports]);
 
   // Fetch session and permissions on mount
   useEffect(() => {
@@ -86,14 +89,7 @@ export default function EmployeeDashboardPage() {
     fetchSessionAndPermissions();
   }, []);
 
-  // Fetch reports when session is loaded
-  useEffect(() => {
-    if (session?.employeeId) {
-      fetchReports();
-    }
-  }, [session]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     if (!session?.employeeId) return;
     
     setLoading(true);
@@ -111,21 +107,28 @@ export default function EmployeeDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.employeeId]);
 
-  const handleEditClick = (report: WorkReport) => {
+  // Fetch reports when session is loaded
+  useEffect(() => {
+    if (session?.employeeId) {
+      fetchReports();
+    }
+  }, [session?.employeeId, fetchReports]);
+
+  const handleEditClick = useCallback((report: WorkReport) => {
     setEditingReport(report);
     setEditStatus(report.status);
     setEditWorkReport(report.workReport || '');
-  };
+  }, []);
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingReport(null);
     setEditStatus('working');
     setEditWorkReport('');
-  };
+  }, []);
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = useCallback(async () => {
     if (!editingReport) return;
 
     if (editStatus === 'working' && !editWorkReport.trim()) {
@@ -149,7 +152,7 @@ export default function EmployeeDashboardPage() {
 
       if (data.success) {
         toast.success('Report updated successfully');
-        setReports(reports.map(r => 
+        setReports(prev => prev.map(r => 
           r.id === editingReport.id ? data.data : r
         ));
         handleCancelEdit();
@@ -161,49 +164,47 @@ export default function EmployeeDashboardPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [editingReport, editStatus, editWorkReport, handleCancelEdit]);
 
-  const formatDate = (dateStr: string) => {
-    return formatDateForDisplay(dateStr);
-  };
+  const formatDate = useCallback((dateStr: string) => formatDateForDisplay(dateStr), []);
+  const getShortDay = useCallback((dateStr: string) => getShortDayIST(dateStr), []);
+  const getShortDate = useCallback((dateStr: string) => getShortDateIST(dateStr), []);
 
-  const getShortDay = (dateStr: string) => {
-    return getShortDayIST(dateStr);
-  };
-
-  const getShortDate = (dateStr: string) => {
-    return getShortDateIST(dateStr);
-  };
-
-  const toggleExpand = (reportId: number) => {
+  const toggleExpand = useCallback((reportId: number) => {
     if (editingReport?.id === reportId) return;
-    setExpandedReportId(expandedReportId === reportId ? null : reportId);
-  };
+    setExpandedReportId(prev => prev === reportId ? null : reportId);
+  }, [editingReport?.id]);
 
   // Calculate stats
-  const workingCount = reports.filter(r => r.status === 'working').length;
-  const leaveCount = reports.filter(r => r.status === 'leave').length;
-  const onDutyCount = reports.filter(r => r.onDuty).length;
-  const attendanceRate = reports.length > 0 ? Math.round((workingCount / reports.length) * 100) : 0;
+  const stats = useMemo(() => {
+    const workingCount = reports.filter(r => r.status === 'working').length;
+    const leaveCount = reports.filter(r => r.status === 'leave').length;
+    const onDutyCount = reports.filter(r => r.onDuty).length;
+    const attendanceRate = reports.length > 0 ? Math.round((workingCount / reports.length) * 100) : 0;
+    return { workingCount, leaveCount, onDutyCount, attendanceRate, total: reports.length };
+  }, [reports]);
   
   // Check if today's report is submitted (using IST)
-  const today = getISTTodayDateString();
-  const todayReport = reports.find(r => r.date === today);
+  const today = useMemo(() => getISTTodayDateString(), []);
+  const todayReport = useMemo(() => reports.find(r => r.date === today), [reports, today]);
   
   // Helper function to check if report is a late submission
-  // A report is "late" if the report date is before the date when it was submitted
-  const isLateSubmission = (report: WorkReport) => {
-    // Extract the date from createdAt (when the report was submitted)
+  const isLateSubmission = useCallback((report: WorkReport) => {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    // Compare report date with submission date
     return report.date < submissionDate;
-  };
+  }, []);
 
-  // Show loading while checking session
+  // Loading state
   if (sessionLoading) {
     return (
-      <div className="min-h-screen pt-14 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen pt-16 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-4 border-muted" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-primary animate-spin" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -211,357 +212,455 @@ export default function EmployeeDashboardPage() {
   // Not logged in
   if (!session) {
     return (
-      <div className="min-h-screen pt-14">
-        <div className="container py-12 px-4 md:px-6">
-          <div className="max-w-md mx-auto text-center">
-            <h1 className="text-2xl font-bold mb-2">Login Required</h1>
-            <p className="text-muted-foreground mb-6">
-              Please login to access your dashboard.
-            </p>
-            <Button onClick={() => window.location.href = '/login'}>
-              Go to Login
-            </Button>
+      <div className="min-h-screen pt-16 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mx-auto mb-6">
+            <Lock className="h-10 w-10 text-muted-foreground" />
           </div>
+          <h1 className="text-2xl font-bold mb-2">Login Required</h1>
+          <p className="text-muted-foreground mb-6">Please login to access your dashboard.</p>
+          <Button onClick={() => window.location.href = '/login'} className="btn-shine">
+            Go to Login <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pt-14">
-      <div className="container py-8 px-4 md:px-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
+    <div className="min-h-screen pt-16 pb-12 bg-gradient-to-b from-background via-background to-muted/20">
+      <div className="container px-4 md:px-6 py-8">
+        <div className="max-w-5xl mx-auto">
+          
+          {/* Header Section */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold tracking-tight">Employee Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome back, {session.name}
-            </p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <User className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+                <p className="text-sm text-muted-foreground">
+                  Welcome back, {session.name.split(' ')[0]}
+                </p>
+              </div>
+            </div>
           </div>
 
-        {/* Profile & Stats - Two Column Layout */}
-        <div className="grid gap-4 lg:grid-cols-5 mb-6">
-          {/* Left Column - Employee Details */}
-          <Card className="lg:col-span-2">
-            <CardContent className="p-5">
+          {/* Profile & Action Card */}
+          <div className="grid gap-4 lg:grid-cols-3 mb-6">
+            {/* Profile Card */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-card border shadow-sm">
               <div className="flex items-start gap-4">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-xl bg-foreground text-background flex items-center justify-center text-lg font-bold">
-                    {session.name.charAt(0)}
+                {/* Avatar */}
+                <div className="relative flex-shrink-0">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center text-2xl font-bold shadow-lg shadow-primary/20">
+                    {session.name.charAt(0).toUpperCase()}
                   </div>
-                  <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background ${
-                    todayReport ? (todayReport.status === 'working' ? 'bg-green-500' : 'bg-amber-500') : 'bg-muted-foreground'
-                  }`} />
+                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-card flex items-center justify-center ${
+                    todayReport 
+                      ? todayReport.status === 'working' 
+                        ? 'bg-emerald-500' 
+                        : 'bg-amber-500'
+                      : 'bg-muted-foreground'
+                  }`}>
+                    {todayReport ? (
+                      todayReport.status === 'working' 
+                        ? <CheckCircle2 className="w-3 h-3 text-white" />
+                        : <Coffee className="w-3 h-3 text-white" />
+                    ) : (
+                      <Clock className="w-3 h-3 text-white" />
+                    )}
+                  </div>
                 </div>
+                
+                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold truncate">{session.name}</h2>
-                  <p className="text-sm text-muted-foreground truncate">{session.email}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                  <h2 className="text-xl font-semibold truncate">{session.name}</h2>
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-3">
+                    <Mail className="w-3.5 h-3.5" />
+                    <span className="truncate">{session.email}</span>
+                  </div>
+                  
+                  {/* Badges */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg">
                       <User className="h-3 w-3" />
                       {session.employeeId}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg">
                       <Building2 className="h-3 w-3" />
                       {session.department}
                     </span>
+                    {todayReport ? (
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${
+                        todayReport.status === 'working'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      }`}>
+                        <CheckCircle2 className="h-3 w-3" />
+                        Today&apos;s Report Submitted
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
+                        <AlertCircle className="h-3 w-3" />
+                        Report Pending
+                      </span>
+                    )}
                   </div>
-                  {!todayReport && (
-                    <Link href="/work-report" className="block mt-3">
-                      <Button size="sm" className="w-full">
-                        <Plus className="h-4 w-4 mr-1.5" />
-                        Submit Today&apos;s Report
-                      </Button>
-                    </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Card */}
+            <div className={`p-6 rounded-2xl border shadow-sm ${
+              todayReport 
+                ? 'bg-gradient-to-br from-emerald-500/5 to-green-500/5 border-emerald-500/20' 
+                : 'bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20'
+            }`}>
+              <div className="flex flex-col h-full">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${
+                  todayReport 
+                    ? 'bg-emerald-500/10' 
+                    : 'bg-primary/10'
+                }`}>
+                  {todayReport ? (
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  ) : (
+                    <CalendarDays className="w-6 h-6 text-primary" />
                   )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Right Column - Stats */}
-          <Card className="lg:col-span-3">
-            <CardContent className="p-5">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                {/* Total Reports */}
-                <div className="p-3 rounded-lg border bg-card">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">Total Reports</p>
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <p className="text-2xl font-bold">{reports.length}</p>
-                </div>
-
-                {/* Working Days */}
-                <div className="p-3 rounded-lg border bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-900">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">Working Days</p>
-                    <Briefcase className="h-4 w-4 text-green-600" />
-                  </div>
-                  <p className="text-2xl font-bold text-green-600">{workingCount}</p>
-                </div>
-
-                {/* On Duty */}
-                <div className="p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">On Duty</p>
-                    <Shield className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <p className="text-2xl font-bold text-blue-600">{onDutyCount}</p>
-                </div>
-
-                {/* Leave Days */}
-                <div className="p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">Leave Days</p>
-                    <Coffee className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <p className="text-2xl font-bold text-amber-600">{leaveCount}</p>
-                </div>
-
-                {/* Attendance */}
-                <div className={`p-3 rounded-lg border ${
-                  attendanceRate >= 80 
-                    ? 'bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-900' 
-                    : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'
-                }`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-muted-foreground">Attendance</p>
-                    <TrendingUp className={`h-4 w-4 ${attendanceRate >= 80 ? 'text-green-600' : 'text-amber-600'}`} />
-                  </div>
-                  <p className={`text-2xl font-bold ${attendanceRate >= 80 ? 'text-green-600' : 'text-amber-600'}`}>{attendanceRate}%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Edit Permission Info */}
-        {canEditOwnReports && (
-          <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-              <Pencil className="h-4 w-4" />
-              <span className="text-sm font-medium">You can edit your work reports (only on the day they were created)</span>
-            </div>
-          </div>
-        )}
-
-        {/* Reports List - Compact Tiles */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Work Report History</CardTitle>
-            <CardDescription>Your submitted work reports</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : reports.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-6">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">No Reports Yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  You haven&apos;t submitted any work reports yet.
+                
+                <h3 className="font-semibold mb-1">
+                  {todayReport ? 'Report Submitted' : 'Today\'s Report'}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                  {todayReport 
+                    ? `You marked ${todayReport.status === 'working' ? 'working' : 'leave'} for today.`
+                    : 'Don\'t forget to submit your daily work report.'}
                 </p>
-                <Link href="/work-report">
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Submit Your First Report
+                
+                <Link href="/work-report" className="block">
+                  <Button 
+                    size="sm" 
+                    className={`w-full ${
+                      todayReport 
+                        ? 'bg-emerald-600 hover:bg-emerald-700' 
+                        : 'bg-gradient-to-r from-primary to-primary/80'
+                    }`}
+                  >
+                    {todayReport ? (
+                      <>View Report</>
+                    ) : (
+                      <><Plus className="h-4 w-4 mr-1.5" /> Submit Report</>
+                    )}
                   </Button>
                 </Link>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {reports.map((report) => (
-                  <div key={report.id}>
-                    {/* Compact Tile */}
-                    <div
-                      onClick={() => toggleExpand(report.id)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                        expandedReportId === report.id || editingReport?.id === report.id
-                          ? 'bg-muted'
-                          : 'hover:bg-muted/50'
-                      }`}
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            {/* Total Reports */}
+            <div className="p-4 rounded-2xl bg-card border shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">Total Reports</span>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-3xl font-bold">{stats.total}</p>
+            </div>
+
+            {/* Working Days */}
+            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">Working Days</span>
+                <Briefcase className="h-4 w-4 text-emerald-500" />
+              </div>
+              <p className="text-3xl font-bold text-emerald-600">{stats.workingCount}</p>
+            </div>
+
+            {/* On Duty */}
+            <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">On Duty</span>
+                <Shield className="h-4 w-4 text-blue-500" />
+              </div>
+              <p className="text-3xl font-bold text-blue-600">{stats.onDutyCount}</p>
+            </div>
+
+            {/* Leave Days */}
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">Leave Days</span>
+                <Coffee className="h-4 w-4 text-amber-500" />
+              </div>
+              <p className="text-3xl font-bold text-amber-600">{stats.leaveCount}</p>
+            </div>
+
+            {/* Attendance Rate */}
+            <div className={`p-4 rounded-2xl border shadow-sm ${
+              stats.attendanceRate >= 80 
+                ? 'bg-emerald-500/5 border-emerald-500/20' 
+                : 'bg-amber-500/5 border-amber-500/20'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">Attendance</span>
+                <TrendingUp className={`h-4 w-4 ${stats.attendanceRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`} />
+              </div>
+              <p className={`text-3xl font-bold ${stats.attendanceRate >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {stats.attendanceRate}%
+              </p>
+            </div>
+          </div>
+
+          {/* Edit Permission Banner */}
+          {canEditOwnReports && (
+            <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                  <Pencil className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Editing Enabled</p>
+                  <p className="text-xs text-muted-foreground">You can edit your reports on the day they were created</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reports List */}
+          <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+            <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  Work Report History
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Your submitted work reports</p>
+              </div>
+              {reports.length > 0 && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {reports.length} reports
+                </span>
+              )}
+            </div>
+            
+            <div className="p-3">
+              {loading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Loading reports...</p>
+                  </div>
+                </div>
+              ) : reports.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
+                    <FileText className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="font-semibold text-lg mb-2">No Reports Yet</h3>
+                  <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                    You haven&apos;t submitted any work reports yet. Start by submitting your first report.
+                  </p>
+                  <Link href="/work-report">
+                    <Button className="bg-gradient-to-r from-primary to-primary/80">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Submit Your First Report
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {reports.map((report, index) => (
+                    <div 
+                      key={report.id}
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
                     >
-                      {/* Status Indicator */}
-                      <div className={`w-1.5 h-8 rounded-full flex-shrink-0 ${
-                        report.status === 'working' ? 'bg-green-500' : 'bg-amber-500'
-                      }`} />
-                      
-                      {/* Day & Date */}
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-10 text-center flex-shrink-0">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase">{getShortDay(report.date)}</p>
-                          <p className="text-sm font-bold">{getDayOfMonthIST(report.date)}</p>
-                        </div>
-                        <div className="text-xs text-muted-foreground flex-shrink-0">
-                          {getShortDate(report.date)}
-                        </div>
-                        
-                        {/* Status Badge */}
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium flex-shrink-0 ${
+                      {/* Report Card */}
+                      <div
+                        onClick={() => toggleExpand(report.id)}
+                        className={`group relative overflow-hidden rounded-xl transition-all duration-300 ${
+                          expandedReportId === report.id || editingReport?.id === report.id
+                            ? 'bg-muted/50 shadow-sm'
+                            : 'hover:bg-muted/30 cursor-pointer'
+                        }`}
+                      >
+                        {/* Gradient accent bar */}
+                        <div className={`absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r ${
                           report.status === 'working' 
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' 
-                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400'
-                        }`}>
-                          {report.status === 'working' ? 'Working' : 'Leave'}
-                        </span>
-                        
-                        {/* On Duty Badge */}
-                        {report.onDuty && (
-                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 flex-shrink-0">
-                            <Shield className="h-3 w-3" />
-                            On Duty
-                          </span>
-                        )}
-                        
-                        {/* Late Submission Badge */}
-                        {isLateSubmission(report) && (
-                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 flex-shrink-0">
-                            <AlertCircle className="h-3 w-3" />
-                            Late Submitted
-                          </span>
-                        )}
-
-                        {/* Preview of report (truncated) */}
-                        {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
-                          <p className="text-xs text-muted-foreground truncate flex-1 hidden sm:block">
-                            {report.workReport.substring(0, 50)}{report.workReport.length > 50 ? '...' : ''}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Expand/Edit Icons */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {canEditReport(report) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditClick(report);
-                              setExpandedReportId(report.id);
-                            }}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
-                          expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
+                            ? 'from-emerald-400 to-green-500' 
+                            : 'from-amber-400 to-orange-500'
                         }`} />
+                        
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          {/* Date Block */}
+                          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
+                            report.status === 'working'
+                              ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
+                              : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
+                          }`}>
+                            <span className="text-xs font-medium uppercase opacity-90">{getShortDay(report.date)}</span>
+                            <span className="text-xl font-bold leading-none">{getDayOfMonthIST(report.date)}</span>
+                          </div>
+                          
+                          {/* Content */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium">{getShortDate(report.date)}</span>
+                                
+                                {/* Status badges */}
+                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  report.status === 'working' 
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                }`}>
+                                  {report.status === 'working' ? (
+                                    <><CheckCircle2 className="w-3 h-3" /> Working</>
+                                  ) : (
+                                    <><Coffee className="w-3 h-3" /> Leave</>
+                                  )}
+                                </span>
+                                
+                                {report.onDuty && (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                    <Shield className="w-3 h-3" /> Duty
+                                  </span>
+                                )}
+                                
+                                {isLateSubmission(report) && (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-red-500/10 text-red-600 dark:text-red-400">
+                                    <Clock className="w-3 h-3" /> Late
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Preview */}
+                              {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {report.workReport.substring(0, 80)}{report.workReport.length > 80 ? '...' : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {canEditReport(report) && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(report);
+                                  setExpandedReportId(report.id);
+                                }}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
+                              expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
+                            }`} />
+                          </div>
+                        </div>
+
+                        {/* Expanded Content */}
+                        {(expandedReportId === report.id || editingReport?.id === report.id) && (
+                          <div className="px-4 pb-4 pt-2 animate-fade-in">
+                            <div className="pl-[74px]">
+                              <div className="pl-4 border-l-2 border-border">
+                                {editingReport?.id === report.id ? (
+                                  <div className="space-y-4 py-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                        <CalendarDays className="h-4 w-4" />
+                                        {formatDate(report.date)}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={saving} className="h-8 px-3">
+                                          <X className="h-3.5 w-3.5 mr-1" /> Cancel
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          onClick={handleSaveEdit} 
+                                          disabled={saving}
+                                          className="h-8 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                                        >
+                                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Check className="h-3.5 w-3.5 mr-1" /> Save</>}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <Label className="text-xs font-medium">Status</Label>
+                                      <div className="grid grid-cols-2 gap-3 max-w-md">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditStatus('working')}
+                                          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                                            editStatus === 'working'
+                                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
+                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                          }`}
+                                        >
+                                          <Briefcase className="h-4 w-4" /> Working
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditStatus('leave')}
+                                          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                                            editStatus === 'leave'
+                                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/30'
+                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                          }`}
+                                        >
+                                          <Coffee className="h-4 w-4" /> Leave
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label className="text-xs font-medium">
+                                        Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
+                                      </Label>
+                                      <textarea
+                                        value={editWorkReport}
+                                        onChange={(e) => setEditWorkReport(e.target.value)}
+                                        placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
+                                        className="flex min-h-28 w-full max-w-2xl rounded-xl border border-input bg-background/50 px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="py-2">
+                                    {report.workReport ? (
+                                      <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                                        {report.workReport}
+                                      </p>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground italic">No details provided</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
-                    {/* Expanded Content */}
-                    {(expandedReportId === report.id || editingReport?.id === report.id) && (
-                      <div className="mt-1 ml-4 pl-4 border-l-2 border-muted">
-                        {/* Edit Mode */}
-                        {editingReport?.id === report.id ? (
-                          <div className="space-y-3 py-3 pr-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">{formatDate(report.date)}</span>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={handleCancelEdit}
-                                  disabled={saving}
-                                  className="h-7 px-2"
-                                >
-                                  <X className="h-3.5 w-3.5 mr-1" />
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={handleSaveEdit}
-                                  disabled={saving}
-                                  className="h-7 px-2"
-                                >
-                                  {saving ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Check className="h-3.5 w-3.5 mr-1" />
-                                      Save
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
-                            </div>
-                            
-                            {/* Status Toggle */}
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium">Status</Label>
-                              <div className="flex rounded-md border p-0.5 bg-muted/50">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditStatus('working')}
-                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                                    editStatus === 'working'
-                                      ? 'bg-background text-foreground shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground'
-                                  }`}
-                                >
-                                  <Briefcase className={`h-3.5 w-3.5 ${editStatus === 'working' ? 'text-green-600' : ''}`} />
-                                  Working
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditStatus('leave')}
-                                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                                    editStatus === 'leave'
-                                      ? 'bg-background text-foreground shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground'
-                                  }`}
-                                >
-                                  <Coffee className={`h-3.5 w-3.5 ${editStatus === 'leave' ? 'text-amber-600' : ''}`} />
-                                  On Leave
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Work Report */}
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium">
-                                Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
-                              </Label>
-                              <textarea
-                                value={editWorkReport}
-                                onChange={(e) => setEditWorkReport(e.target.value)}
-                                placeholder={editStatus === 'working' ? 'Work report is required...' : 'Optional notes...'}
-                                className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-foreground resize-none transition-all"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          /* View Mode - Expanded */
-                          <div className="py-3 pr-3">
-                            {report.workReport ? (
-                              <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                                {report.workReport}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground italic">
-                                No details provided
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
         </div>
       </div>
     </div>
   );
 }
-

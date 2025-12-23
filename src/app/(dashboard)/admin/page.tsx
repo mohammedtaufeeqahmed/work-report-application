@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Users, Search, Pencil, Trash2, X, Key, Upload, Download, FileJson, FileSpreadsheet, Check, Filter, UserX, UserCheck, CheckCircle2, Calendar, Building2 } from 'lucide-react';
+import { Loader2, Plus, Users, Search, Pencil, Trash2, X, Key, Upload, Download, FileJson, FileSpreadsheet, Check, Filter, UserX, UserCheck, CheckCircle2, Calendar, Building2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SafeEmployee, SessionUser, Department } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -703,82 +703,100 @@ export default function AdminPage() {
                       Mark Attendance
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <UserX className="h-5 w-5" />
-                        Mark Employee as Absent
-                      </DialogTitle>
-                      <DialogDescription>
-                        {session?.role === 'manager'
-                          ? 'Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.'
-                          : session?.department === 'Operations'
-                          ? 'Select an employee and date to mark them as absent. You can mark employees from your assigned departments or all employees if no departments are assigned.'
-                          : 'Select an employee and date to mark them as absent.'}
-                      </DialogDescription>
-                    </DialogHeader>
+                  <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col p-0">
+                    {/* Header with gradient */}
+                    <div className="relative px-6 pt-6 pb-4 border-b border-border/50 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20">
+                          <UserX className="h-5 w-5 text-primary-foreground" />
+                        </div>
+                        <div className="flex-1">
+                          <DialogTitle className="text-xl font-bold">Mark Employee as Absent</DialogTitle>
+                          <DialogDescription className="text-sm mt-1">
+                            {session?.role === 'manager'
+                              ? 'Select an employee and date to mark them as absent. You can only mark employees in your assigned departments.'
+                              : session?.department === 'Operations'
+                              ? 'Select an employee and date to mark them as absent. You can mark employees from your assigned departments or all employees if no departments are assigned.'
+                              : 'Select an employee and date to mark them as absent.'}
+                          </DialogDescription>
+                        </div>
+                      </div>
+                    </div>
                     
-                    <div className="mt-6 space-y-6">
-                      {/* Date Selection */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          Select Date
-                        </label>
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                      {/* Date Selection Card */}
+                      <div className="relative p-4 rounded-xl bg-gradient-to-br from-card/80 to-card/50 border border-border/50 backdrop-blur-sm shadow-sm">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Calendar className="h-4 w-4 text-primary" />
+                          </div>
+                          <label className="text-sm font-semibold">Select Date</label>
+                        </div>
                         <Input
                           type="date"
                           value={absentDate}
                           onChange={(e) => setAbsentDate(e.target.value)}
                           max={getISTTodayDateString()}
-                          className="w-full"
+                          className="w-full h-11 bg-background/50 border-border/50 focus:border-primary/50"
                         />
                         {absentDate && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3" />
                             {getFullDateIST(absentDate)}
                           </p>
                         )}
                       </div>
 
-                      {/* Employee Count */}
-                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">
-                            {filteredEmployees.length} {filteredEmployees.length === 1 ? 'Employee' : 'Employees'}
-                          </span>
+                      {/* Stats Card */}
+                      <div className="relative p-4 rounded-xl bg-gradient-to-br from-muted/30 to-muted/10 border border-border/50 backdrop-blur-sm">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <Users className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-2xl font-bold">{filteredEmployees.length}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {filteredEmployees.length === 1 ? 'Employee' : 'Employees'} Available
+                              </p>
+                            </div>
+                          </div>
+                          {teamEmployees.length > 0 && (
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-muted-foreground">Total</p>
+                              <p className="text-lg font-bold">{teamEmployees.length}</p>
+                            </div>
+                          )}
                         </div>
-                        {teamEmployees.length > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            Total: {teamEmployees.length}
-                          </span>
-                        )}
                       </div>
 
                       {/* Search and Filter */}
                       {teamEmployees.length > 0 && (
                         <div className="space-y-3">
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                               placeholder="Search by name, ID, or department..."
                               value={employeeSearch}
                               onChange={(e) => setEmployeeSearch(e.target.value)}
-                              className="pl-9"
+                              className="pl-11 h-11 bg-background/50 border-border/50 focus:border-primary/50"
                             />
                           </div>
                           {markAbsentDepartments.length > 1 && (
-                            <div className="flex items-center gap-2">
-                              <Filter className="h-4 w-4 text-muted-foreground" />
+                            <div className="relative">
+                              <Filter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                               <select
                                 value={selectedDepartment}
                                 onChange={(e) => setSelectedDepartment(e.target.value)}
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="flex h-11 w-full rounded-lg border border-border/50 bg-background/50 px-4 pl-11 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 appearance-none cursor-pointer"
                               >
                                 <option value="all">All Departments</option>
                                 {markAbsentDepartments.map(dept => (
                                   <option key={dept} value={dept}>{dept}</option>
                                 ))}
                               </select>
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                             </div>
                           )}
                         </div>
@@ -786,16 +804,21 @@ export default function AdminPage() {
 
                       {/* Employee List */}
                       {loadingTeam ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-3">
-                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        <div className="flex flex-col items-center justify-center py-16 gap-4">
+                          <div className="relative w-12 h-12">
+                            <div className="absolute inset-0 rounded-full border-4 border-muted" />
+                            <div className="absolute inset-0 rounded-full border-4 border-t-primary animate-spin" />
+                          </div>
                           <p className="text-sm text-muted-foreground">Loading employees...</p>
                         </div>
                       ) : teamEmployees.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                          <Users className="h-12 w-12 text-muted-foreground/50" />
+                        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                            <Users className="h-8 w-8 text-muted-foreground/50" />
+                          </div>
                           <div>
-                            <p className="text-sm font-medium">No employees found</p>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-sm font-semibold mb-1">No employees found</p>
+                            <p className="text-xs text-muted-foreground">
                               {session?.role === 'manager'
                                 ? 'No employees are assigned to your departments yet.'
                                 : 'No employees available to mark as absent.'}
@@ -803,72 +826,97 @@ export default function AdminPage() {
                           </div>
                         </div>
                       ) : filteredEmployees.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                          <Search className="h-12 w-12 text-muted-foreground/50" />
+                        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
+                            <Search className="h-8 w-8 text-muted-foreground/50" />
+                          </div>
                           <div>
-                            <p className="text-sm font-medium">No employees match your search</p>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-sm font-semibold mb-1">No employees match your search</p>
+                            <p className="text-xs text-muted-foreground">
                               Try adjusting your search or filter criteria.
                             </p>
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
                           {filteredEmployees.map((employee) => {
                             const isMarking = markingAbsent === employee.employeeId;
                             const isRecentlyMarked = recentlyMarked.has(employee.employeeId);
                             return (
                               <div
                                 key={employee.employeeId}
-                                className={`group relative p-4 border rounded-lg transition-all ${
+                                className={`group relative overflow-hidden rounded-xl transition-all duration-300 ${
                                   isRecentlyMarked
-                                    ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
-                                    : 'bg-card hover:bg-muted/50 border-border'
+                                    ? 'bg-gradient-to-br from-emerald-500/10 to-green-500/5 border-2 border-emerald-500/30 shadow-sm'
+                                    : 'bg-gradient-to-br from-card/80 to-card/50 border border-border/50 hover:border-primary/30 hover:shadow-md'
                                 }`}
                               >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h4 className="font-medium text-sm truncate">{employee.name}</h4>
-                                      {isRecentlyMarked && (
-                                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                {/* Gradient accent bar */}
+                                {isRecentlyMarked && (
+                                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-500" />
+                                )}
+                                
+                                <div className="p-4">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                      {/* Avatar */}
+                                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                                        isRecentlyMarked
+                                          ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
+                                          : 'bg-gradient-to-br from-primary/10 to-primary/5 text-primary'
+                                      }`}>
+                                        {employee.name.charAt(0).toUpperCase()}
+                                      </div>
+                                      
+                                      {/* Info */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <h4 className="font-semibold text-sm truncate">{employee.name}</h4>
+                                          {isRecentlyMarked && (
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/50 font-mono">
+                                            {employee.employeeId}
+                                          </span>
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/50">
+                                            <Building2 className="h-3 w-3" />
+                                            {employee.department}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Action Button */}
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleMarkAbsent(employee.employeeId)}
+                                      disabled={isMarking || !absentDate}
+                                      className={`flex-shrink-0 gap-2 transition-all ${
+                                        isRecentlyMarked
+                                          ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
+                                          : 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70'
+                                      }`}
+                                    >
+                                      {isMarking ? (
+                                        <>
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          <span>Marking...</span>
+                                        </>
+                                      ) : isRecentlyMarked ? (
+                                        <>
+                                          <CheckCircle2 className="h-3.5 w-3.5" />
+                                          <span>Marked</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <UserCheck className="h-3.5 w-3.5" />
+                                          <span>Mark Absent</span>
+                                        </>
                                       )}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      <span className="flex items-center gap-1">
-                                        <span className="font-mono">{employee.employeeId}</span>
-                                      </span>
-                                      <span>•</span>
-                                      <span className="flex items-center gap-1">
-                                        <Building2 className="h-3 w-3" />
-                                        {employee.department}
-                                      </span>
-                                    </div>
+                                    </Button>
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    variant={isRecentlyMarked ? "default" : "outline"}
-                                    onClick={() => handleMarkAbsent(employee.employeeId)}
-                                    disabled={isMarking || !absentDate}
-                                    className="flex-shrink-0 gap-2"
-                                  >
-                                    {isMarking ? (
-                                      <>
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        <span>Marking...</span>
-                                      </>
-                                    ) : isRecentlyMarked ? (
-                                      <>
-                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                        <span>Marked</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <UserCheck className="h-3.5 w-3.5" />
-                                        <span>Mark Absent</span>
-                                      </>
-                                    )}
-                                  </Button>
                                 </div>
                               </div>
                             );

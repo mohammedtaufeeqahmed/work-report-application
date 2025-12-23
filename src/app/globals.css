@@ -857,3 +857,203 @@ h1.brand {
   opacity: 1;
   transform: translateX(-50%) translateY(-4px);
 }
+
+/* Premium Glass Effect */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(20, 20, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Smooth gradient backgrounds */
+.gradient-mesh {
+  background: 
+    radial-gradient(at 40% 20%, hsla(228, 100%, 74%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 80% 0%, hsla(189, 100%, 56%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 0% 50%, hsla(355, 100%, 93%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 80% 50%, hsla(340, 100%, 76%, 0.08) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, hsla(269, 100%, 77%, 0.08) 0px, transparent 50%);
+}
+
+.dark .gradient-mesh {
+  background: 
+    radial-gradient(at 40% 20%, hsla(228, 100%, 34%, 0.15) 0px, transparent 50%),
+    radial-gradient(at 80% 0%, hsla(189, 100%, 26%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 50%, hsla(355, 100%, 43%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 80% 50%, hsla(340, 100%, 36%, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, hsla(269, 100%, 37%, 0.1) 0px, transparent 50%);
+}
+
+/* Premium card hover */
+.card-premium {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-premium::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.card-premium:hover::before {
+  opacity: 1;
+}
+
+.card-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1),
+    0 20px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+.dark .card-premium:hover {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -2px rgba(0, 0, 0, 0.3),
+    0 20px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Subtle glow effect */
+.glow-sm {
+  box-shadow: 0 0 20px rgba(var(--primary), 0.1);
+}
+
+.glow-md {
+  box-shadow: 0 0 40px rgba(var(--primary), 0.15);
+}
+
+/* Animated gradient border */
+.gradient-border-animated {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius);
+}
+
+.gradient-border-animated::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    45deg,
+    transparent 0%,
+    rgba(var(--primary), 0.3) 25%,
+    transparent 50%,
+    rgba(var(--primary), 0.3) 75%,
+    transparent 100%
+  );
+  background-size: 400% 400%;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gradient-border-animated:hover::before {
+  opacity: 1;
+  animation: gradient-rotate 3s linear infinite;
+}
+
+@keyframes gradient-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Smooth text gradient */
+.text-gradient {
+  background: linear-gradient(135deg, var(--foreground) 0%, var(--muted-foreground) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Status indicator pulse */
+.status-pulse {
+  position: relative;
+}
+
+.status-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 0.4; }
+  50% { box-shadow: 0 0 0 4px currentColor; opacity: 0; }
+}
+
+/* Modern input focus */
+.input-premium {
+  transition: all 0.2s ease;
+}
+
+.input-premium:focus {
+  box-shadow: 0 0 0 3px rgba(var(--primary), 0.1);
+}
+
+/* Staggered list animation */
+.stagger-item {
+  opacity: 0;
+  animation: stagger-fade-in 0.4s ease forwards;
+}
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Improved scrollbar for horizontal scroll areas */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

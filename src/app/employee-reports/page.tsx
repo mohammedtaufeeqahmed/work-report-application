@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Search, FileText, Briefcase, Coffee, ArrowRight, Lock, Pencil, X, Check, ChevronDown, Filter, Users, Calendar, AlertCircle, Shield, LayoutGrid, List } from 'lucide-react';
+import { 
+  Loader2, Search, FileText, Briefcase, Coffee, ArrowRight, Lock, Pencil, X, Check, 
+  ChevronDown, Filter, Users, Calendar, AlertCircle, Shield, LayoutGrid, List, 
+  TrendingUp, Clock, CheckCircle2, CalendarDays, Building2, Sparkles
+} from 'lucide-react';
 import { toast } from 'sonner';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions, Department } from '@/types';
 import { getISTTodayRange, getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, convertUTCToISTDate } from '@/lib/date';
@@ -16,53 +20,40 @@ export default function EmployeeReportsPage() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [departments, setDepartments] = useState<string[]>([]);
   const [reports, setReports] = useState<WorkReport[]>([]);
-  const [allReports, setAllReports] = useState<WorkReport[]>([]); // Store all fetched reports
+  const [allReports, setAllReports] = useState<WorkReport[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'leave'>('all');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
   
-  // Date range state - default to today (for managers Team Reports) - using IST
-  const getDefaultDates = () => getISTTodayRange();
-  
-  const [dateRange, setDateRange] = useState(getDefaultDates());
+  const getDefaultDates = useCallback(() => getISTTodayRange(), []);
+  const [dateRange, setDateRange] = useState(() => getISTTodayRange());
 
   // Edit state
   const [editingReport, setEditingReport] = useState<WorkReport | null>(null);
   const [editStatus, setEditStatus] = useState<WorkStatus>('working');
   const [editWorkReport, setEditWorkReport] = useState('');
   const [saving, setSaving] = useState(false);
-
-  // Edit permissions state
   const [editPermissions, setEditPermissions] = useState<EditPermissions | null>(null);
-
-  // Expanded report state (for viewing details)
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
 
-  // Scrum board state for managers
+  // Scrum board state
   const [managerDepartments, setManagerDepartments] = useState<Department[]>([]);
   const [viewMode, setViewMode] = useState<'scrum' | 'list'>('scrum');
-  const [departmentColors, setDepartmentColors] = useState<Map<string, { solid: string; gradient: string; border: string; text: string }>>(new Map());
 
-  // Check if user can search for other employees (admin/superadmin/manager roles)
   const canSearchOthers = session?.role === 'admin' || session?.role === 'superadmin' || session?.role === 'manager';
   const isManager = session?.role === 'manager';
   const isSingleDept = managerDepartments.length === 1;
 
-  // Redirect employees to their dashboard - they should use that instead
   useEffect(() => {
     if (!sessionLoading && session && session.role === 'employee') {
       window.location.href = '/employee-dashboard';
     }
   }, [sessionLoading, session]);
   
-  // Check if user can edit reports based on role, permissions, and creation date
-  const canEdit = (report: WorkReport) => {
+  const canEdit = useCallback((report: WorkReport) => {
     if (!session || !editPermissions) return false;
-    
     const isOwnReport = report.employeeId === session.employeeId;
-    
-    // First check role-based permissions
     let hasPermission = false;
     
     if (session.role === 'superadmin') {
@@ -70,70 +61,27 @@ export default function EmployeeReportsPage() {
     } else if (session.role === 'admin') {
       hasPermission = editPermissions.admin_can_edit_reports;
     } else if (session.role === 'employee' && isOwnReport) {
-      // Employees can edit their own reports if permission is enabled
       hasPermission = editPermissions.employee_can_edit_own_reports;
     } else if (session.role === 'manager' && isOwnReport) {
-      // Managers can also edit their own reports when employee_can_edit_own_reports is enabled
       hasPermission = editPermissions.employee_can_edit_own_reports;
     }
     
     if (!hasPermission) return false;
     
-    // Check if the report was created today (edit only allowed on creation day)
-    // Convert UTC createdAt to IST date and compare with today in IST
     const createdDate = convertUTCToISTDate(report.createdAt);
     const todayDate = getISTTodayDateString();
-    
     return createdDate === todayDate;
-  };
+  }, [session, editPermissions]);
 
-  // Color allocation system - Pastel colors
-  const getDepartmentColor = (departmentName: string, index: number) => {
-    const colors = [
-      { solid: 'bg-pink-100 dark:bg-pink-900/20', gradient: 'from-pink-100 to-pink-200 dark:from-pink-900/30 dark:to-pink-800/30', border: 'border-pink-300 dark:border-pink-700', text: 'text-pink-900 dark:text-pink-200' },
-      { solid: 'bg-purple-100 dark:bg-purple-900/20', gradient: 'from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30', border: 'border-purple-300 dark:border-purple-700', text: 'text-purple-900 dark:text-purple-200' },
-      { solid: 'bg-blue-100 dark:bg-blue-900/20', gradient: 'from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30', border: 'border-blue-300 dark:border-blue-700', text: 'text-blue-900 dark:text-blue-200' },
-      { solid: 'bg-green-100 dark:bg-green-900/20', gradient: 'from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30', border: 'border-green-300 dark:border-green-700', text: 'text-green-900 dark:text-green-200' },
-      { solid: 'bg-yellow-100 dark:bg-yellow-900/20', gradient: 'from-yellow-100 to-yellow-200 dark:from-yellow-900/30 dark:to-yellow-800/30', border: 'border-yellow-300 dark:border-yellow-700', text: 'text-yellow-900 dark:text-yellow-200' },
-      { solid: 'bg-orange-100 dark:bg-orange-900/20', gradient: 'from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30', border: 'border-orange-300 dark:border-orange-700', text: 'text-orange-900 dark:text-orange-200' },
-      { solid: 'bg-cyan-100 dark:bg-cyan-900/20', gradient: 'from-cyan-100 to-cyan-200 dark:from-cyan-900/30 dark:to-cyan-800/30', border: 'border-cyan-300 dark:border-cyan-700', text: 'text-cyan-900 dark:text-cyan-200' },
-      { solid: 'bg-indigo-100 dark:bg-indigo-900/20', gradient: 'from-indigo-100 to-indigo-200 dark:from-indigo-900/30 dark:to-indigo-800/30', border: 'border-indigo-300 dark:border-indigo-700', text: 'text-indigo-900 dark:text-indigo-200' },
-      { solid: 'bg-rose-100 dark:bg-rose-900/20', gradient: 'from-rose-100 to-rose-200 dark:from-rose-900/30 dark:to-rose-800/30', border: 'border-rose-300 dark:border-rose-700', text: 'text-rose-900 dark:text-rose-200' },
-      { solid: 'bg-teal-100 dark:bg-teal-900/20', gradient: 'from-teal-100 to-teal-200 dark:from-teal-900/30 dark:to-teal-800/30', border: 'border-teal-300 dark:border-teal-700', text: 'text-teal-900 dark:text-teal-200' },
-      { solid: 'bg-amber-100 dark:bg-amber-900/20', gradient: 'from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30', border: 'border-amber-300 dark:border-amber-700', text: 'text-amber-900 dark:text-amber-200' },
-      { solid: 'bg-lime-100 dark:bg-lime-900/20', gradient: 'from-lime-100 to-lime-200 dark:from-lime-900/30 dark:to-lime-800/30', border: 'border-lime-300 dark:border-lime-700', text: 'text-lime-900 dark:text-lime-200' },
-      { solid: 'bg-violet-100 dark:bg-violet-900/20', gradient: 'from-violet-100 to-violet-200 dark:from-violet-900/30 dark:to-violet-800/30', border: 'border-violet-300 dark:border-violet-700', text: 'text-violet-900 dark:text-violet-200' },
-      { solid: 'bg-sky-100 dark:bg-sky-900/20', gradient: 'from-sky-100 to-sky-200 dark:from-sky-900/30 dark:to-sky-800/30', border: 'border-sky-300 dark:border-sky-700', text: 'text-sky-900 dark:text-sky-200' },
-      { solid: 'bg-emerald-100 dark:bg-emerald-900/20', gradient: 'from-emerald-100 to-emerald-200 dark:from-emerald-900/30 dark:to-emerald-800/30', border: 'border-emerald-300 dark:border-emerald-700', text: 'text-emerald-900 dark:text-emerald-200' },
-    ];
-    return colors[index % colors.length];
-  };
-
-  // Initialize department colors
-  useEffect(() => {
-    if (managerDepartments.length > 0) {
-      const colorMap = new Map<string, { solid: string; gradient: string; border: string; text: string }>();
-      managerDepartments.forEach((dept, index) => {
-        colorMap.set(dept.name, getDepartmentColor(dept.name, index));
-      });
-      setDepartmentColors(colorMap);
-    }
-  }, [managerDepartments]);
-
-  const fetchReports = async (query?: string, dept?: string, startDate?: string, endDate?: string) => {
+  const fetchReports = useCallback(async (query?: string, dept?: string, startDate?: string, endDate?: string) => {
     setLoading(true);
     setError('');
     setSearched(true);
 
     try {
       const params = new URLSearchParams();
-      if (query && query.trim()) {
-        params.append('search', query.trim());
-      }
-      if (dept && dept !== 'all') {
-        params.append('department', dept);
-      }
-      // Add date range if provided
+      if (query && query.trim()) params.append('search', query.trim());
+      if (dept && dept !== 'all') params.append('department', dept);
       if (startDate && endDate) {
         params.append('startDate', startDate);
         params.append('endDate', endDate);
@@ -145,12 +93,7 @@ export default function EmployeeReportsPage() {
       if (data.success) {
         const fetchedReports: WorkReport[] = data.data.reports || [];
         setAllReports(fetchedReports);
-        // Apply status filter if set
-        if (statusFilter === 'all') {
-          setReports(fetchedReports);
-        } else {
-          setReports(fetchedReports.filter(r => r.status === statusFilter));
-        }
+        // Reports will be filtered by useEffect based on statusFilter
       } else {
         setError(data.error || 'Failed to fetch reports');
         setReports([]);
@@ -159,12 +102,12 @@ export default function EmployeeReportsPage() {
     } catch {
       setError('Failed to fetch reports');
       setReports([]);
+      setAllReports([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch session and permissions on mount
   useEffect(() => {
     const fetchSessionAndPermissions = async () => {
       try {
@@ -181,7 +124,6 @@ export default function EmployeeReportsPage() {
         if (sessionData.success && sessionData.data) {
           setSession(sessionData.data);
           
-          // For managers, fetch their assigned departments
           if (sessionData.data.role === 'manager') {
             try {
               const deptRes = await fetch('/api/managers/departments');
@@ -194,7 +136,6 @@ export default function EmployeeReportsPage() {
             }
           }
           
-          // For managers/admins, fetch departments list
           const canSearch = sessionData.data.role === 'admin' || 
                            sessionData.data.role === 'superadmin' || 
                            sessionData.data.role === 'manager';
@@ -203,7 +144,6 @@ export default function EmployeeReportsPage() {
             const deptData = await deptRes.json();
             if (deptData.success && deptData.data?.departments) {
               setDepartments(deptData.data.departments);
-              // Auto-load reports for today when "All Departments" is selected (for managers)
               if (sessionData.data.role === 'manager') {
                 const todayDates = getDefaultDates();
                 setDateRange(todayDates);
@@ -225,51 +165,55 @@ export default function EmployeeReportsPage() {
     fetchSessionAndPermissions();
   }, []);
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     fetchReports(searchQuery, selectedDepartment, dateRange.start, dateRange.end);
-  };
+  }, [searchQuery, selectedDepartment, dateRange.start, dateRange.end, fetchReports]);
 
-  const handleDepartmentChange = (dept: string) => {
+  const handleDepartmentChange = useCallback((dept: string) => {
     setSelectedDepartment(dept);
     fetchReports(searchQuery, dept, dateRange.start, dateRange.end);
-  };
+  }, [searchQuery, dateRange.start, dateRange.end, fetchReports]);
 
-  const handleDateRangeChange = (start: string, end: string) => {
+  const handleDateRangeChange = useCallback((start: string, end: string) => {
     setDateRange({ start, end });
     fetchReports(searchQuery, selectedDepartment, start, end);
-  };
+  }, [searchQuery, selectedDepartment, fetchReports]);
 
-  const handleStatusFilter = (status: 'all' | 'working' | 'leave') => {
+  const handleStatusFilter = useCallback((status: 'all' | 'working' | 'leave') => {
     setStatusFilter(status);
-    if (status === 'all') {
+  }, []);
+  
+  // Update reports when status filter or allReports changes
+  useEffect(() => {
+    if (statusFilter === 'all') {
       setReports(allReports);
     } else {
-      setReports(allReports.filter(r => r.status === status));
+      setReports(allReports.filter(r => r.status === statusFilter));
     }
-  };
+  }, [statusFilter, allReports]);
 
-  const handleClearFilters = () => {
+  const handleClearFilters = useCallback(() => {
     setSearchQuery('');
     setSelectedDepartment('all');
     setStatusFilter('all');
-    const todayDates = getDefaultDates();
+    const todayDates = getISTTodayRange();
     setDateRange(todayDates);
     fetchReports('', 'all', todayDates.start, todayDates.end);
-  };
+  }, [fetchReports]);
 
-  const handleEditClick = (report: WorkReport) => {
+  const handleEditClick = useCallback((report: WorkReport) => {
     setEditingReport(report);
     setEditStatus(report.status);
     setEditWorkReport(report.workReport || '');
-  };
+  }, []);
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingReport(null);
     setEditStatus('working');
     setEditWorkReport('');
-  };
+  }, []);
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = useCallback(async () => {
     if (!editingReport) return;
 
     if (editStatus === 'working' && !editWorkReport.trim()) {
@@ -293,10 +237,8 @@ export default function EmployeeReportsPage() {
 
       if (data.success) {
         toast.success('Report updated successfully');
-        // Update the report in the list
-        setReports(reports.map(r => 
-          r.id === editingReport.id ? data.data : r
-        ));
+        setReports(prev => prev.map(r => r.id === editingReport.id ? data.data : r));
+        setAllReports(prev => prev.map(r => r.id === editingReport.id ? data.data : r));
         handleCancelEdit();
       } else {
         toast.error(data.error || 'Failed to update report');
@@ -306,67 +248,51 @@ export default function EmployeeReportsPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [editingReport, editStatus, editWorkReport, handleCancelEdit]);
 
-  const formatDate = (dateStr: string) => {
-    return formatDateForDisplay(dateStr);
-  };
+  const formatDate = useCallback((dateStr: string) => formatDateForDisplay(dateStr), []);
+  const getShortDay = useCallback((dateStr: string) => getShortDayIST(dateStr), []);
+  const getShortDate = useCallback((dateStr: string) => getShortDateIST(dateStr), []);
 
-  const getShortDay = (dateStr: string) => {
-    return getShortDayIST(dateStr);
-  };
+  const toggleExpand = useCallback((reportId: number) => {
+    if (editingReport?.id === reportId) return;
+    setExpandedReportId(prev => prev === reportId ? null : reportId);
+  }, [editingReport?.id]);
 
-  const getShortDate = (dateStr: string) => {
-    return getShortDateIST(dateStr);
-  };
-
-  const toggleExpand = (reportId: number) => {
-    if (editingReport?.id === reportId) return; // Don't collapse while editing
-    setExpandedReportId(expandedReportId === reportId ? null : reportId);
-  };
-
-  // Count unique dates for working days (from all reports in current filters)
-  const workingReports = allReports.filter(r => r.status === 'working');
-  const workingCount = [...new Set(workingReports.map(r => r.date))].length;
+  // Stats calculations
+  const stats = useMemo(() => {
+    const workingReports = allReports.filter(r => r.status === 'working');
+    const workingCount = [...new Set(workingReports.map(r => r.date))].length;
+    const leaveCount = allReports.filter(r => r.status === 'leave').length;
+    const onDutyCount = allReports.filter(r => r.onDuty).length;
+    const uniqueEmployees = [...new Set(allReports.map(r => r.employeeId))].length;
+    
+    return { workingCount, leaveCount, onDutyCount, uniqueEmployees, total: reports.length };
+  }, [allReports, reports]);
   
-  // Count of leave days = total leave reports (sum of leaves taken by employees)
-  const leaveReports = allReports.filter(r => r.status === 'leave');
-  const leaveCount = leaveReports.length;
-  
-  // Count of on duty reports
-  const onDutyCount = allReports.filter(r => r.onDuty).length;
-  
-  const uniqueEmployees = [...new Set(allReports.map(r => r.employeeId))].length;
-  
-  // Helper function to check if report is a late submission
-  // A report is "late" if the report date is before the date when it was submitted
-  const isLateSubmission = (report: WorkReport) => {
-    // Extract the date from createdAt (when the report was submitted)
+  const isLateSubmission = useCallback((report: WorkReport) => {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    // Compare report date with submission date
     return report.date < submissionDate;
-  };
+  }, []);
 
-  // Data transformation for Scrum board
-  const groupReportsByDate = (reports: WorkReport[]) => {
+  const groupReportsByDate = useCallback((reports: WorkReport[]) => {
     return reports.reduce((acc, report) => {
       if (!acc[report.date]) acc[report.date] = [];
       acc[report.date].push(report);
       return acc;
     }, {} as Record<string, WorkReport[]>);
-  };
+  }, []);
 
-  const groupReportsByDateAndDept = (reports: WorkReport[]) => {
+  const groupReportsByDateAndDept = useCallback((reports: WorkReport[]) => {
     return reports.reduce((acc, report) => {
       if (!acc[report.date]) acc[report.date] = {};
       if (!acc[report.date][report.department]) acc[report.date][report.department] = [];
       acc[report.date][report.department].push(report);
       return acc;
     }, {} as Record<string, Record<string, WorkReport[]>>);
-  };
+  }, []);
 
-  // Get all dates in range for Scrum board
-  const getAllDatesInRange = (startDate: string, endDate: string): string[] => {
+  const getAllDatesInRange = useCallback((startDate: string, endDate: string): string[] => {
     const dates: string[] = [];
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -378,179 +304,197 @@ export default function EmployeeReportsPage() {
     }
     
     return dates;
-  };
+  }, []);
 
-  // WorkReportCard Component
-  const WorkReportCard = ({ report, colorAccent }: { report: WorkReport; colorAccent?: { solid: string; gradient: string; border: string; text: string } }) => {
-    const borderColor = colorAccent?.border || 'border-border';
+  // Premium color palette for departments
+  const departmentColors = useMemo(() => {
+    const colors = [
+      { bg: 'from-violet-500/10 to-purple-500/10', border: 'border-violet-500/20', accent: 'bg-violet-500', text: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-500/10 text-violet-600 dark:text-violet-400' },
+      { bg: 'from-blue-500/10 to-cyan-500/10', border: 'border-blue-500/20', accent: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+      { bg: 'from-emerald-500/10 to-teal-500/10', border: 'border-emerald-500/20', accent: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+      { bg: 'from-amber-500/10 to-orange-500/10', border: 'border-amber-500/20', accent: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
+      { bg: 'from-rose-500/10 to-pink-500/10', border: 'border-rose-500/20', accent: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
+      { bg: 'from-indigo-500/10 to-blue-500/10', border: 'border-indigo-500/20', accent: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' },
+    ];
+    const colorMap = new Map<string, typeof colors[0]>();
+    managerDepartments.forEach((dept, index) => {
+      colorMap.set(dept.name, colors[index % colors.length]);
+    });
+    return colorMap;
+  }, [managerDepartments]);
+
+  // Modern Work Report Card
+  const WorkReportCard = ({ report, compact = false }: { report: WorkReport; compact?: boolean }) => {
+    const isExpanded = expandedReportId === report.id || editingReport?.id === report.id;
+    const isEditing = editingReport?.id === report.id;
     
     return (
       <div
-        onClick={() => toggleExpand(report.id)}
-        className={`group relative p-3 rounded-lg border-l-4 ${borderColor} bg-card hover:bg-muted/50 transition-all cursor-pointer ${
-          expandedReportId === report.id || editingReport?.id === report.id ? 'bg-muted' : ''
+        onClick={() => !compact && toggleExpand(report.id)}
+        className={`group relative overflow-hidden rounded-xl transition-all duration-300 ${
+          compact ? 'p-3' : 'p-4'
+        } ${
+          isExpanded 
+            ? 'bg-card shadow-lg ring-1 ring-foreground/5' 
+            : 'bg-card/50 hover:bg-card hover:shadow-md cursor-pointer'
         }`}
       >
-        <div className="flex items-start gap-2">
-          {/* Employee Avatar */}
-          <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center text-xs font-bold flex-shrink-0">
-            {report.name?.charAt(0) || 'E'}
+        {/* Gradient accent bar */}
+        <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${
+          report.status === 'working' 
+            ? 'from-emerald-400 to-green-500' 
+            : 'from-amber-400 to-orange-500'
+        }`} />
+        
+        <div className="flex items-start gap-3">
+          {/* Avatar with status ring */}
+          <div className="relative flex-shrink-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
+              report.status === 'working'
+                ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
+                : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
+            }`}>
+              {report.name?.charAt(0).toUpperCase() || 'E'}
+            </div>
+            {report.onDuty && (
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ring-2 ring-card">
+                <Shield className="w-3 h-3 text-white" />
+              </div>
+            )}
           </div>
           
           <div className="flex-1 min-w-0">
-            {/* Employee Name & ID */}
-            <div className="mb-1">
-              <p className="text-sm font-medium truncate">{report.name}</p>
-              <p className="text-xs text-muted-foreground truncate font-mono">{report.employeeId}</p>
+            {/* Name & ID */}
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="font-semibold text-sm truncate">{report.name}</h4>
+              <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">
+                {report.employeeId}
+              </span>
             </div>
             
-            {/* Status Badge */}
-            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+            {/* Status badges */}
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
                 report.status === 'working' 
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' 
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
               }`}>
-                {report.status === 'working' ? 'Working' : 'Leave'}
+                {report.status === 'working' ? (
+                  <><CheckCircle2 className="w-3 h-3" /> Working</>
+                ) : (
+                  <><Coffee className="w-3 h-3" /> Leave</>
+                )}
               </span>
               
-              {/* On Duty Badge */}
               {report.onDuty && (
-                <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
-                  <Shield className="h-3 w-3" />
-                  On Duty
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <Shield className="w-3 h-3" /> On Duty
                 </span>
               )}
               
-              {/* Late Submission Badge */}
               {isLateSubmission(report) && (
-                <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
-                  <AlertCircle className="h-3 w-3" />
-                  Late
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-red-500/10 text-red-600 dark:text-red-400">
+                  <Clock className="w-3 h-3" /> Late
                 </span>
               )}
             </div>
             
-            {/* Work Report Preview */}
-            {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
+            {/* Work report preview */}
+            {report.workReport && !isExpanded && (
+              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                 {report.workReport}
               </p>
             )}
             
-            {/* Expanded Content */}
-            {(expandedReportId === report.id || editingReport?.id === report.id) && (
-              <div className="mt-2 pt-2 border-t border-border">
-                {editingReport?.id === report.id ? (
-                  <div className="space-y-2">
+            {/* Expanded content */}
+            {isExpanded && (
+              <div className="mt-3 pt-3 border-t border-border/50 animate-fade-in">
+                {isEditing ? (
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground">{formatDate(report.date)}</span>
-                      <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        {formatDate(report.date)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCancelEdit();
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
                           disabled={saving}
-                          className="h-6 px-2 text-xs"
+                          className="h-7 px-2 text-xs"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="w-3.5 h-3.5 mr-1" /> Cancel
                         </Button>
                         <Button
                           size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSaveEdit();
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
                           disabled={saving}
-                          className="h-6 px-2 text-xs"
+                          className="h-7 px-3 text-xs bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                         >
-                          {saving ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Check className="h-3 w-3" />
-                          )}
+                          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Save</>}
                         </Button>
                       </div>
                     </div>
                     
-                    {/* Status Toggle */}
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <Label className="text-xs font-medium">Status</Label>
-                      <div className="flex rounded-md border p-0.5 bg-muted/50">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditStatus('working');
-                          }}
-                          className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all ${
+                          onClick={(e) => { e.stopPropagation(); setEditStatus('working'); }}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                             editStatus === 'working'
-                              ? 'bg-background text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                           }`}
                         >
-                          <Briefcase className={`h-3 w-3 ${editStatus === 'working' ? 'text-green-600' : ''}`} />
-                          Working
+                          <Briefcase className="w-3.5 h-3.5" /> Working
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditStatus('leave');
-                          }}
-                          className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all ${
+                          onClick={(e) => { e.stopPropagation(); setEditStatus('leave'); }}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                             editStatus === 'leave'
-                              ? 'bg-background text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                           }`}
                         >
-                          <Coffee className={`h-3 w-3 ${editStatus === 'leave' ? 'text-amber-600' : ''}`} />
-                          Leave
+                          <Coffee className="w-3.5 h-3.5" /> Leave
                         </button>
                       </div>
                     </div>
                     
-                    {/* Work Report */}
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <Label className="text-xs font-medium">
-                        Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
+                        Work Report {editStatus === 'working' && <span className="text-red-500">*</span>}
                       </Label>
                       <textarea
                         value={editWorkReport}
                         onChange={(e) => setEditWorkReport(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        placeholder={editStatus === 'working' ? 'Work report is required...' : 'Optional notes...'}
-                        className="flex min-h-16 w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-foreground resize-none transition-all"
+                        placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
+                        className="flex min-h-24 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
                       />
                     </div>
                   </div>
                 ) : (
                   <div>
                     {report.workReport ? (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                      <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
                         {report.workReport}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground italic">
-                        No details provided
-                      </p>
+                      <p className="text-sm text-muted-foreground italic">No details provided</p>
                     )}
                     {canEdit(report) && (
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClick(report);
-                          setExpandedReportId(report.id);
-                        }}
-                        className="h-6 px-2 mt-2 text-xs"
+                        onClick={(e) => { e.stopPropagation(); handleEditClick(report); setExpandedReportId(report.id); }}
+                        className="mt-3 h-7 px-3 text-xs"
                       >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Edit
+                        <Pencil className="w-3 h-3 mr-1.5" /> Edit Report
                       </Button>
                     )}
                   </div>
@@ -558,16 +502,27 @@ export default function EmployeeReportsPage() {
               </div>
             )}
           </div>
+          
+          {/* Expand indicator */}
+          {!compact && !isExpanded && (
+            <ChevronDown className="w-4 h-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors flex-shrink-0" />
+          )}
         </div>
       </div>
     );
   };
 
-  // Show loading while checking session
+  // Loading state
   if (sessionLoading) {
     return (
-      <div className="min-h-screen pt-14 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen pt-16 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-4 border-muted" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-primary animate-spin" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -575,266 +530,257 @@ export default function EmployeeReportsPage() {
   // Not logged in
   if (!session) {
     return (
-      <div className="min-h-screen pt-14">
-        <div className="container py-12 px-4 md:px-6">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-6">
-              <Lock className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold mb-2">Login Required</h1>
-            <p className="text-muted-foreground mb-6">
-              Please login to view your work reports.
-            </p>
-            <Button onClick={() => window.location.href = '/login'}>
-              Go to Login
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+      <div className="min-h-screen pt-16 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mx-auto mb-6">
+            <Lock className="h-10 w-10 text-muted-foreground" />
           </div>
+          <h1 className="text-2xl font-bold mb-2">Login Required</h1>
+          <p className="text-muted-foreground mb-6">Please login to view work reports.</p>
+          <Button onClick={() => window.location.href = '/login'} className="btn-shine">
+            Go to Login <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pt-14">
-      <div className="container py-12 px-4 md:px-6">
-        <div className={`${isManager && viewMode === 'scrum' ? 'max-w-full' : 'max-w-4xl'} mx-auto`}>
-          {/* Header */}
-          <div className="text-center mb-10 animate-fade-in-down">
-            <h1 className="text-3xl font-bold mb-2">
-              {canSearchOthers
-                ? session?.role === 'manager'
-                  ? 'Team Reports'
-                  : 'Employee Reports'
-                : 'My Work Reports'}
-            </h1>
-            <p className="text-muted-foreground">
-              {canSearchOthers 
-                ? session?.role === 'manager'
-                  ? 'View and manage your team\'s work reports'
-                  : 'View and manage work report history' 
-                : 'View your work report history'}
-            </p>
+    <div className="min-h-screen pt-16 pb-12 bg-gradient-to-b from-background via-background to-muted/20">
+      <div className="container px-4 md:px-6 py-8">
+        <div className={`${isManager && viewMode === 'scrum' ? 'max-w-[1600px]' : 'max-w-5xl'} mx-auto`}>
+          
+          {/* Header Section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  {canSearchOthers
+                    ? session?.role === 'manager' ? 'Team Reports' : 'Employee Reports'
+                    : 'My Work Reports'}
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {canSearchOthers 
+                    ? session?.role === 'manager'
+                      ? 'Monitor and manage your team\'s daily work updates'
+                      : 'View and manage employee work history' 
+                    : 'Track your work report submissions'}
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Search - Only show for admins/managers */}
+          {/* Search & Filters Section */}
           {canSearchOthers && (
-            <div className="border rounded-xl p-6 mb-8 bg-card animate-fade-in-up opacity-0 delay-100" style={{ animationFillMode: 'forwards' }}>
+            <div className="mb-6 p-5 rounded-2xl bg-card border shadow-sm">
               <div className="space-y-4">
-                {/* Search Input */}
+                {/* Search Bar */}
                 <div className="flex gap-3">
                   <div className="flex-1 relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="text"
-                      placeholder="Search by Employee ID, Name, or Department..."
+                      placeholder="Search by name, ID, or department..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                      className="pl-11 h-12"
+                      className="pl-11 h-12 bg-background/50 border-muted-foreground/20 focus:border-primary"
                     />
                   </div>
-                  <Button onClick={handleSearch} disabled={loading} className="h-12 px-6 btn-shine">
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        Search
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
+                  <Button 
+                    onClick={handleSearch} 
+                    disabled={loading} 
+                    className="h-12 px-6 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-2" /> Search</>}
                   </Button>
                 </div>
                 
                 {/* Filter Row */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Filter by:</span>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Filter className="h-4 w-4" />
+                    <span>Filters:</span>
                   </div>
                   
-                  {/* Department Filter */}
-                  <select
-                    value={selectedDepartment}
-                    onChange={(e) => handleDepartmentChange(e.target.value)}
-                    className="h-9 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 cursor-pointer"
-                  >
-                    <option value="all">All Departments</option>
-                    {departments.map((dept) => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
+                  {/* Department */}
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <select
+                      value={selectedDepartment}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                      className="h-9 pl-9 pr-8 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer appearance-none"
+                    >
+                      <option value="all">All Departments</option>
+                      {departments.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  </div>
                   
-                  {/* Date Range Filter */}
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex items-center gap-2">
+                  {/* Date Range */}
+                  <div className="flex items-center gap-2 bg-muted/30 rounded-lg p-1">
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                       <Input
                         type="date"
                         value={dateRange.start}
                         onChange={(e) => handleDateRangeChange(e.target.value, dateRange.end)}
-                        className="h-9 w-36 text-sm"
-                      />
-                      <span className="text-sm text-muted-foreground">to</span>
-                      <Input
-                        type="date"
-                        value={dateRange.end}
-                        onChange={(e) => handleDateRangeChange(dateRange.start, e.target.value)}
-                        className="h-9 w-36 text-sm"
+                        className="h-8 pl-9 w-36 text-sm bg-background border-0"
                       />
                     </div>
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <Input
+                      type="date"
+                      value={dateRange.end}
+                      onChange={(e) => handleDateRangeChange(dateRange.start, e.target.value)}
+                      className="h-8 w-36 text-sm bg-background border-0"
+                    />
                   </div>
                   
                   {/* Clear Filters */}
-                  {(searchQuery || selectedDepartment !== 'all' || statusFilter !== 'all' || dateRange.start !== getDefaultDates().start || dateRange.end !== getDefaultDates().end) && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleClearFilters}
-                      className="h-9 px-3 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5 mr-1.5" />
-                      Clear
+                  {(searchQuery || selectedDepartment !== 'all' || statusFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={handleClearFilters} className="h-9 text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5 mr-1.5" /> Clear
                     </Button>
                   )}
                 </div>
-                
-                {/* Search Info */}
-                {searched && reports.length > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                    <Users className="h-4 w-4" />
-                    <span>
-                      Found <strong className="text-foreground">{reports.length}</strong> report{reports.length !== 1 ? 's' : ''}
-                      {statusFilter !== 'all' && (
-                        <> - <strong className="text-foreground">{statusFilter === 'working' ? 'Working' : 'Leave'} only</strong></>
-                      )}
-                      {searchQuery && <> matching &quot;<strong className="text-foreground">{searchQuery}</strong>&quot;</>}
-                      {selectedDepartment !== 'all' && <> in <strong className="text-foreground">{selectedDepartment}</strong></>}
-                      {dateRange.start && dateRange.end && (
-                        <> from <strong className="text-foreground">
-                          {getShortDateIST(dateRange.start)} - {getShortDateIST(dateRange.end)}
-                        </strong></>
-                      )}
-                    </span>
-                  </div>
-                )}
               </div>
-              {error && <p className="text-sm text-destructive mt-3 animate-fade-in">{error}</p>}
+              {error && <p className="text-sm text-destructive mt-3 flex items-center gap-2"><AlertCircle className="h-4 w-4" />{error}</p>}
             </div>
           )}
 
-          {/* Loading state for regular employees */}
+          {/* Loading for regular employees */}
           {!canSearchOthers && loading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           )}
 
-          {/* Error for regular employees */}
-          {!canSearchOthers && error && (
-            <div className="border rounded-xl p-6 mb-8 bg-card">
-              <p className="text-sm text-destructive">{error}</p>
-            </div>
-          )}
-
-          {/* View Mode Toggle - Only for managers */}
-          {isManager && searched && reports.length > 0 && (
-            <div className="flex items-center justify-end gap-2 mb-4">
-              <Button
-                variant={viewMode === 'scrum' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('scrum')}
-                className="gap-2"
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Scrum Board
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="gap-2"
-              >
-                <List className="h-4 w-4" />
-                List View
-              </Button>
-            </div>
-          )}
-
-          {/* Results */}
+          {/* Results Section */}
           {searched && !loading && (
-            <div className="animate-fade-in-up">
+            <>
               {reports.length === 0 ? (
-                <div className="border rounded-xl p-16 text-center bg-card">
-                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-6">
+                <div className="rounded-2xl border border-dashed p-16 text-center bg-card/50">
+                  <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
                     <FileText className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <h3 className="font-semibold text-lg mb-2">No Reports Found</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                     {searchQuery 
-                      ? <>No work reports matching &quot;<span className="font-medium">{searchQuery}</span>&quot;</>
-                      : selectedDepartment !== 'all'
-                        ? <>No work reports found in <span className="font-medium">{selectedDepartment}</span></>
-                        : 'No work reports found for the given criteria.'}
+                      ? <>No reports matching &quot;{searchQuery}&quot;</>
+                      : 'No work reports found for the selected criteria.'}
                   </p>
                 </div>
               ) : (
                 <>
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                    <div className="border rounded-xl p-5 text-center bg-card hover-lift transition-all cursor-default">
-                      <p className="text-3xl font-bold animate-count">{reports.length}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Total Reports</p>
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+                    <div className="p-4 rounded-2xl bg-card border shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">Total Reports</span>
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <p className="text-3xl font-bold">{stats.total}</p>
                     </div>
+                    
                     <button
                       onClick={() => handleStatusFilter(statusFilter === 'working' ? 'all' : 'working')}
-                      className={`border rounded-xl p-5 text-center bg-card hover-lift transition-all cursor-pointer ${
-                        statusFilter === 'working' ? 'ring-2 ring-green-500 bg-green-50 dark:bg-green-950/20' : ''
+                      className={`p-4 rounded-2xl border shadow-sm transition-all text-left ${
+                        statusFilter === 'working' 
+                          ? 'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/10' 
+                          : 'bg-card hover:shadow-md'
                       }`}
                     >
-                      <p className={`text-3xl font-bold animate-count ${statusFilter === 'working' ? 'text-green-700 dark:text-green-400' : 'text-green-600'}`}>
-                        {workingCount}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Working Days</p>
-                    </button>
-                    <div className="border rounded-xl p-5 text-center bg-card hover-lift transition-all cursor-default bg-blue-50/50 dark:bg-blue-950/20">
-                      <div className="flex items-center justify-center gap-1">
-                        <p className="text-3xl font-bold animate-count text-blue-600">{onDutyCount}</p>
-                        <Shield className="h-5 w-5 text-blue-600" />
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">Working Days</span>
+                        <TrendingUp className={`h-4 w-4 ${statusFilter === 'working' ? 'text-emerald-500' : 'text-emerald-500/60'}`} />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">On Duty</p>
+                      <p className={`text-3xl font-bold ${statusFilter === 'working' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-600'}`}>
+                        {stats.workingCount}
+                      </p>
+                    </button>
+                    
+                    <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">On Duty</span>
+                        <Shield className="h-4 w-4 text-blue-500" />
+                      </div>
+                      <p className="text-3xl font-bold text-blue-600">{stats.onDutyCount}</p>
                     </div>
+                    
                     <button
                       onClick={() => handleStatusFilter(statusFilter === 'leave' ? 'all' : 'leave')}
-                      className={`border rounded-xl p-5 text-center bg-card hover-lift transition-all cursor-pointer ${
-                        statusFilter === 'leave' ? 'ring-2 ring-amber-500 bg-amber-50 dark:bg-amber-950/20' : ''
+                      className={`p-4 rounded-2xl border shadow-sm transition-all text-left ${
+                        statusFilter === 'leave' 
+                          ? 'bg-amber-500/10 border-amber-500/30 shadow-amber-500/10' 
+                          : 'bg-card hover:shadow-md'
                       }`}
                     >
-                      <p className={`text-3xl font-bold animate-count ${statusFilter === 'leave' ? 'text-amber-700 dark:text-amber-400' : 'text-amber-600'}`}>
-                        {leaveCount}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">Total Leaves</p>
-                    </button>
-                    <div className="border rounded-xl p-5 text-center bg-card hover-lift transition-all cursor-default">
-                      <div className="flex items-center justify-center gap-1">
-                        <p className="text-3xl font-bold animate-count">{uniqueEmployees}</p>
-                        <Users className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">Total Leaves</span>
+                        <Coffee className={`h-4 w-4 ${statusFilter === 'leave' ? 'text-amber-500' : 'text-amber-500/60'}`} />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Employees</p>
+                      <p className={`text-3xl font-bold ${statusFilter === 'leave' ? 'text-amber-600 dark:text-amber-400' : 'text-amber-600'}`}>
+                        {stats.leaveCount}
+                      </p>
+                    </button>
+                    
+                    <div className="p-4 rounded-2xl bg-card border shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground">Employees</span>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <p className="text-3xl font-bold">{stats.uniqueEmployees}</p>
                     </div>
                   </div>
 
-                  {/* Scrum Board View for Managers */}
+                  {/* View Mode Toggle */}
+                  {isManager && (
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Sparkles className="h-4 w-4" />
+                        <span>Showing {reports.length} reports from {getShortDateIST(dateRange.start)} to {getShortDateIST(dateRange.end)}</span>
+                      </div>
+                      <div className="flex items-center bg-muted/50 rounded-lg p-1">
+                        <button
+                          onClick={() => setViewMode('scrum')}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                            viewMode === 'scrum' 
+                              ? 'bg-background shadow-sm text-foreground' 
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <LayoutGrid className="h-4 w-4" /> Board
+                        </button>
+                        <button
+                          onClick={() => setViewMode('list')}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                            viewMode === 'list' 
+                              ? 'bg-background shadow-sm text-foreground' 
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <List className="h-4 w-4" /> List
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scrum Board View */}
                   {isManager && viewMode === 'scrum' && managerDepartments.length > 0 && (
                     <div className="mb-8">
                       {isSingleDept ? (
-                        /* Single Department Layout - Date Columns */
-                        <div className="overflow-x-auto">
-                          <div className="flex gap-4 min-w-max pb-4">
+                        <div className="overflow-x-auto pb-4 -mx-4 px-4">
+                          <div className="flex gap-4 min-w-max">
                             {(() => {
                               const reportsByDate = groupReportsByDate(reports);
                               const allDates = getAllDatesInRange(dateRange.start, dateRange.end);
-                              const deptColor = managerDepartments[0] ? departmentColors.get(managerDepartments[0].name) : undefined;
+                              const deptColor = managerDepartments[0] ? departmentColors.get(managerDepartments[0].name) : null;
                               
                               return allDates.map(date => {
                                 const dateReports = reportsByDate[date] || [];
@@ -842,46 +788,39 @@ export default function EmployeeReportsPage() {
                                 
                                 return (
                                   <div key={date} className="w-80 flex-shrink-0">
-                                    {/* Date Column Header */}
-                                    <div className={`sticky top-0 z-10 p-3 rounded-t-lg border-b-2 ${
-                                      deptColor?.gradient 
-                                        ? `bg-gradient-to-b ${deptColor.gradient} ${deptColor.border}` 
-                                        : `${deptColor?.solid || 'bg-muted'} ${deptColor?.border || 'border-border'}`
-                                    }`}>
+                                    {/* Column Header */}
+                                    <div className={`sticky top-0 z-10 p-4 rounded-t-xl border-b-2 backdrop-blur-sm bg-gradient-to-r ${deptColor?.bg || 'from-muted/50 to-muted'} ${deptColor?.border || 'border-border'}`}>
                                       <div className="flex items-center justify-between">
                                         <div>
-                                          <p className={`text-sm font-semibold ${deptColor?.text || 'text-foreground'}`}>
+                                          <p className={`text-base font-bold ${isToday ? 'text-primary' : ''}`}>
                                             {getShortDay(date)}
                                           </p>
-                                          <p className={`text-xs ${deptColor?.text || 'text-muted-foreground'}`}>
-                                            {getShortDate(date)}
-                                          </p>
+                                          <p className="text-xs text-muted-foreground">{getShortDate(date)}</p>
                                         </div>
-                                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                        <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
                                           isToday 
-                                            ? 'bg-primary/20 text-primary' 
-                                            : 'bg-muted text-muted-foreground'
+                                            ? 'bg-primary text-primary-foreground' 
+                                            : dateReports.length > 0 
+                                              ? deptColor?.badge || 'bg-muted text-muted-foreground'
+                                              : 'bg-muted/50 text-muted-foreground'
                                         }`}>
                                           {dateReports.length} {dateReports.length === 1 ? 'report' : 'reports'}
-                                        </span>
+                                        </div>
                                       </div>
                                     </div>
                                     
-                                    {/* Reports Cards */}
-                                    <div className={`p-3 space-y-2 min-h-[200px] ${
-                                      deptColor?.solid || 'bg-card'
-                                    } rounded-b-lg border-x border-b ${deptColor?.border || 'border-border'}`}>
+                                    {/* Cards Container */}
+                                    <div className={`p-3 space-y-2 min-h-[300px] rounded-b-xl border border-t-0 ${deptColor?.border || 'border-border'} bg-gradient-to-b ${deptColor?.bg || 'from-muted/20 to-transparent'}`}>
                                       {dateReports.length === 0 ? (
-                                        <div className="flex items-center justify-center py-8 text-center">
-                                          <p className="text-xs text-muted-foreground">No reports</p>
+                                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                                          <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
+                                            <FileText className="w-5 h-5 text-muted-foreground/50" />
+                                          </div>
+                                          <p className="text-xs text-muted-foreground">No reports yet</p>
                                         </div>
                                       ) : (
                                         dateReports.map(report => (
-                                          <WorkReportCard 
-                                            key={report.id} 
-                                            report={report}
-                                            colorAccent={deptColor}
-                                          />
+                                          <WorkReportCard key={report.id} report={report} compact />
                                         ))
                                       )}
                                     </div>
@@ -892,26 +831,28 @@ export default function EmployeeReportsPage() {
                           </div>
                         </div>
                       ) : (
-                        /* Multiple Department Layout - Date Rows × Dept Columns */
-                        <div className="overflow-x-auto border rounded-lg">
-                          <table className="w-full border-collapse">
+                        /* Multi-Department Grid */
+                        <div className="overflow-x-auto rounded-xl border shadow-sm">
+                          <table className="w-full border-collapse bg-card">
                             <thead>
                               <tr>
-                                <th className="sticky left-0 z-20 bg-background border-r border-b p-3 text-left text-sm font-semibold">
-                                  Date
+                                <th className="sticky left-0 z-20 bg-muted/80 backdrop-blur-sm border-r border-b p-4 text-left text-sm font-semibold min-w-[120px]">
+                                  <div className="flex items-center gap-2">
+                                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                                    Date
+                                  </div>
                                 </th>
                                 {managerDepartments.map(dept => {
-                                  const colorScheme = departmentColors.get(dept.name);
+                                  const color = departmentColors.get(dept.name);
                                   return (
                                     <th
                                       key={dept.id}
-                                      className={`sticky top-0 z-10 p-3 text-center text-sm font-semibold border-b-2 ${
-                                        colorScheme?.gradient
-                                          ? `bg-gradient-to-b ${colorScheme.gradient} ${colorScheme.border}`
-                                          : `${colorScheme?.solid || 'bg-muted'} ${colorScheme?.border || 'border-border'}`
-                                      } ${colorScheme?.text || 'text-foreground'}`}
+                                      className={`sticky top-0 z-10 p-4 text-center text-sm font-semibold border-b-2 min-w-[280px] bg-gradient-to-r ${color?.bg || 'from-muted to-muted'} ${color?.border || 'border-border'}`}
                                     >
-                                      {dept.name}
+                                      <div className="flex items-center justify-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${color?.accent || 'bg-muted-foreground'}`} />
+                                        {dept.name}
+                                      </div>
                                     </th>
                                   );
                                 })}
@@ -926,36 +867,32 @@ export default function EmployeeReportsPage() {
                                   const isToday = date === getISTTodayDateString();
                                   
                                   return (
-                                    <tr key={date}>
-                                      <td className={`sticky left-0 z-10 bg-background border-r p-3 text-sm font-medium ${
-                                        isToday ? 'bg-primary/5' : ''
+                                    <tr key={date} className="hover:bg-muted/30 transition-colors">
+                                      <td className={`sticky left-0 z-10 border-r p-4 text-sm font-medium min-w-[120px] ${
+                                        isToday ? 'bg-primary/5' : 'bg-card'
                                       }`}>
-                                        <div>
-                                          <p className="font-semibold">{getShortDay(date)}</p>
-                                          <p className="text-xs text-muted-foreground">{getShortDate(date)}</p>
+                                        <div className="flex items-center gap-2">
+                                          {isToday && <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
+                                          <div>
+                                            <p className={`font-semibold ${isToday ? 'text-primary' : ''}`}>{getShortDay(date)}</p>
+                                            <p className="text-xs text-muted-foreground">{getShortDate(date)}</p>
+                                          </div>
                                         </div>
                                       </td>
                                       {managerDepartments.map(dept => {
-                                        const colorScheme = departmentColors.get(dept.name);
+                                        const color = departmentColors.get(dept.name);
                                         const deptReports = reportsByDateAndDept[date]?.[dept.name] || [];
                                         
                                         return (
-                                          <td
-                                            key={dept.id}
-                                            className={`p-2 align-top border-r ${colorScheme?.solid || 'bg-card'} ${colorScheme?.border || 'border-border'}`}
-                                          >
+                                          <td key={dept.id} className={`p-2 align-top border-r bg-gradient-to-b ${color?.bg || 'from-muted/10 to-transparent'}`}>
                                             <div className="space-y-2 min-h-[100px]">
                                               {deptReports.length === 0 ? (
-                                                <div className="flex items-center justify-center py-4 text-center">
-                                                  <p className="text-xs text-muted-foreground">No reports</p>
+                                                <div className="flex items-center justify-center py-8 text-center">
+                                                  <span className="text-xs text-muted-foreground/50">—</span>
                                                 </div>
                                               ) : (
                                                 deptReports.map(report => (
-                                                  <WorkReportCard
-                                                    key={report.id}
-                                                    report={report}
-                                                    colorAccent={colorScheme}
-                                                  />
+                                                  <WorkReportCard key={report.id} report={report} compact />
                                                 ))
                                               )}
                                             </div>
@@ -973,234 +910,229 @@ export default function EmployeeReportsPage() {
                     </div>
                   )}
 
-                  {/* Reports List - Compact Tiles with Employee Info */}
+                  {/* List View */}
                   {(!isManager || viewMode === 'list') && (
-                    <div className="border rounded-xl overflow-hidden bg-card">
-                    <div className="p-4 border-b bg-muted/30">
-                      <h3 className="font-semibold text-sm">Work Reports</h3>
-                    </div>
-                    <div className="p-3 space-y-2">
-                      {reports.map((report, index) => (
-                        <div 
-                          key={report.id} 
-                          className="animate-fade-in"
-                          style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
-                        >
-                          {/* Compact Tile */}
-                          <div
-                            onClick={() => toggleExpand(report.id)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                              expandedReportId === report.id || editingReport?.id === report.id
-                                ? 'bg-muted'
-                                : 'hover:bg-muted/50'
-                            }`}
+                    <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                      <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
+                        <h3 className="font-semibold text-sm flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          Work Reports
+                        </h3>
+                        {statusFilter !== 'all' && (
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                            statusFilter === 'working' 
+                              ? 'bg-emerald-500/10 text-emerald-600' 
+                              : 'bg-amber-500/10 text-amber-600'
+                          }`}>
+                            {statusFilter === 'working' ? 'Working only' : 'Leave only'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-border/50">
+                        {reports.map((report, index) => (
+                          <div 
+                            key={report.id} 
+                            className="animate-fade-in"
+                            style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
                           >
-                            {/* Status Indicator */}
-                            <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${
-                              report.status === 'working' ? 'bg-green-500' : 'bg-amber-500'
-                            }`} />
-                            
-                            {/* Employee Info + Date */}
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              {/* Employee Avatar */}
-                              <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                {report.name?.charAt(0) || 'E'}
-                              </div>
-                              
-                              {/* Employee Name & ID */}
-                              <div className="min-w-0 flex-shrink-0 w-28 sm:w-36">
-                                <p className="text-sm font-medium truncate">{report.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">{report.employeeId}</p>
-                              </div>
-                              
-                              {/* Department */}
-                              <div className="hidden md:block text-xs text-muted-foreground flex-shrink-0 w-24 truncate">
-                                {report.department}
-                              </div>
-                              
-                              {/* Date */}
-                              <div className="text-xs text-muted-foreground flex-shrink-0 w-16 text-center">
-                                <p className="font-semibold uppercase">{getShortDay(report.date)}</p>
-                                <p>{getShortDate(report.date)}</p>
-                              </div>
-                              
-                              {/* Status Badge */}
-                              <span className={`text-xs px-2 py-0.5 rounded font-medium flex-shrink-0 ${
+                            <div
+                              onClick={() => toggleExpand(report.id)}
+                              className={`flex items-center gap-4 px-4 py-3 cursor-pointer transition-all ${
+                                expandedReportId === report.id || editingReport?.id === report.id
+                                  ? 'bg-muted/50'
+                                  : 'hover:bg-muted/30'
+                              }`}
+                            >
+                              {/* Status Bar */}
+                              <div className={`w-1 h-12 rounded-full flex-shrink-0 ${
                                 report.status === 'working' 
-                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' 
-                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400'
-                              }`}>
-                                {report.status === 'working' ? 'Working' : 'Leave'}
-                              </span>
-                              
-                              {/* On Duty Badge */}
-                              {report.onDuty && (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 flex-shrink-0">
-                                  <Shield className="h-3 w-3" />
-                                  On Duty
-                                </span>
-                              )}
-                              
-                              {/* Late Submission Badge */}
-                              {isLateSubmission(report) && (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 flex-shrink-0">
-                                  <AlertCircle className="h-3 w-3" />
-                                  Late Submitted
-                                </span>
-                              )}
-
-                              {/* Preview of report (truncated) */}
-                              {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
-                                <p className="text-xs text-muted-foreground truncate flex-1 hidden lg:block">
-                                  {report.workReport.substring(0, 40)}{report.workReport.length > 40 ? '...' : ''}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Expand/Edit Icons */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {canEdit(report) && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditClick(report);
-                                    setExpandedReportId(report.id);
-                                  }}
-                                  className="h-7 w-7 p-0"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
-                                expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
+                                  ? 'bg-gradient-to-b from-emerald-400 to-green-600' 
+                                  : 'bg-gradient-to-b from-amber-400 to-orange-600'
                               }`} />
-                            </div>
-                          </div>
-
-                          {/* Expanded Content */}
-                          {(expandedReportId === report.id || editingReport?.id === report.id) && (
-                            <div className="mt-1 ml-4 pl-4 border-l-2 border-muted">
-                              {/* Edit Mode */}
-                              {editingReport?.id === report.id ? (
-                                <div className="space-y-3 py-3 pr-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">{formatDate(report.date)}</span>
-                                    <div className="flex items-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={handleCancelEdit}
-                                        disabled={saving}
-                                        className="h-7 px-2"
-                                      >
-                                        <X className="h-3.5 w-3.5 mr-1" />
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        onClick={handleSaveEdit}
-                                        disabled={saving}
-                                        className="h-7 px-2"
-                                      >
-                                        {saving ? (
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        ) : (
-                                          <>
-                                            <Check className="h-3.5 w-3.5 mr-1" />
-                                            Save
-                                          </>
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Status Toggle */}
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs font-medium">Status</Label>
-                                    <div className="flex rounded-md border p-0.5 bg-muted/50">
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditStatus('working')}
-                                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                                          editStatus === 'working'
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
-                                      >
-                                        <Briefcase className={`h-3.5 w-3.5 ${editStatus === 'working' ? 'text-green-600' : ''}`} />
-                                        Working
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditStatus('leave')}
-                                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all ${
-                                          editStatus === 'leave'
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
-                                      >
-                                        <Coffee className={`h-3.5 w-3.5 ${editStatus === 'leave' ? 'text-amber-600' : ''}`} />
-                                        On Leave
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Work Report */}
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs font-medium">
-                                      Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
-                                    </Label>
-                                    <textarea
-                                      value={editWorkReport}
-                                      onChange={(e) => setEditWorkReport(e.target.value)}
-                                      placeholder={editStatus === 'working' ? 'Work report is required...' : 'Optional notes...'}
-                                      className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-foreground resize-none transition-all"
-                                    />
-                                  </div>
+                              
+                              {/* Avatar */}
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                                report.status === 'working'
+                                  ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
+                                  : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
+                              }`}>
+                                {report.name?.charAt(0).toUpperCase() || 'E'}
+                              </div>
+                              
+                              {/* Info */}
+                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                <div className="min-w-0 w-36">
+                                  <p className="text-sm font-medium truncate">{report.name}</p>
+                                  <p className="text-xs text-muted-foreground font-mono">{report.employeeId}</p>
                                 </div>
-                              ) : (
-                                /* View Mode - Expanded */
-                                <div className="py-3 pr-3">
-                                  {report.workReport ? (
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                                      {report.workReport}
-                                    </p>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic">
-                                      No details provided
-                                    </p>
+                                
+                                <div className="hidden md:block text-xs text-muted-foreground w-28 truncate">
+                                  {report.department}
+                                </div>
+                                
+                                <div className="text-center flex-shrink-0 w-16">
+                                  <p className="text-xs font-bold uppercase">{getShortDay(report.date)}</p>
+                                  <p className="text-xs text-muted-foreground">{getShortDate(report.date)}</p>
+                                </div>
+                                
+                                {/* Status badges */}
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                    report.status === 'working' 
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                  }`}>
+                                    {report.status === 'working' ? 'Working' : 'Leave'}
+                                  </span>
+                                  
+                                  {report.onDuty && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                      <Shield className="h-3 w-3" /> Duty
+                                    </span>
+                                  )}
+                                  
+                                  {isLateSubmission(report) && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" /> Late
+                                    </span>
                                   )}
                                 </div>
-                              )}
+
+                                {/* Preview */}
+                                {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
+                                  <p className="text-xs text-muted-foreground truncate flex-1 hidden lg:block">
+                                    {report.workReport.substring(0, 60)}{report.workReport.length > 60 ? '...' : ''}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {canEdit(report) && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditClick(report);
+                                      setExpandedReportId(report.id);
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
+                                  expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
+                                }`} />
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      ))}
+
+                            {/* Expanded Content */}
+                            {(expandedReportId === report.id || editingReport?.id === report.id) && (
+                              <div className="px-4 pb-4 pt-2 ml-16 animate-fade-in">
+                                <div className="pl-4 border-l-2 border-border">
+                                  {editingReport?.id === report.id ? (
+                                    <div className="space-y-4 py-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                          <CalendarDays className="h-4 w-4" />
+                                          {formatDate(report.date)}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={saving} className="h-8 px-3">
+                                            <X className="h-3.5 w-3.5 mr-1" /> Cancel
+                                          </Button>
+                                          <Button 
+                                            size="sm" 
+                                            onClick={handleSaveEdit} 
+                                            disabled={saving}
+                                            className="h-8 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                                          >
+                                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Check className="h-3.5 w-3.5 mr-1" /> Save</>}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium">Status</Label>
+                                        <div className="grid grid-cols-2 gap-3 max-w-md">
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditStatus('working')}
+                                            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                                              editStatus === 'working'
+                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                            }`}
+                                          >
+                                            <Briefcase className="h-4 w-4" /> Working
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditStatus('leave')}
+                                            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                                              editStatus === 'leave'
+                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/30'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                            }`}
+                                          >
+                                            <Coffee className="h-4 w-4" /> Leave
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label className="text-xs font-medium">
+                                          Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
+                                        </Label>
+                                        <textarea
+                                          value={editWorkReport}
+                                          onChange={(e) => setEditWorkReport(e.target.value)}
+                                          placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
+                                          className="flex min-h-28 w-full max-w-2xl rounded-xl border border-input bg-background/50 px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="py-2">
+                                      {report.workReport ? (
+                                        <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                                          {report.workReport}
+                                        </p>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground italic">No details provided</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
                   )}
                 </>
               )}
-            </div>
+            </>
           )}
 
-          {/* Initial State - Only for admins who haven't searched */}
+          {/* Initial State for Admins */}
           {canSearchOthers && !searched && !loading && (
-            <div className="border rounded-xl p-16 text-center bg-card animate-fade-in-up opacity-0 delay-200" style={{ animationFillMode: 'forwards' }}>
-              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-6">
-                <Search className="h-8 w-8 text-muted-foreground" />
+            <div className="rounded-2xl border border-dashed p-16 text-center bg-card/50">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mx-auto mb-6">
+                <Search className="h-10 w-10 text-primary/60" />
               </div>
               <h3 className="font-semibold text-lg mb-2">Search Employee Reports</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Search by employee ID, name, or filter by department
+              <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                Search by employee ID, name, or use filters to find work reports
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-                <span>Try searching:</span>
-                <code className="px-2 py-1 bg-muted rounded font-mono">EMP001</code>
+                <span>Try:</span>
+                <code className="px-2.5 py-1 bg-muted rounded-lg font-mono">EMP001</code>
                 <span>or</span>
-                <code className="px-2 py-1 bg-muted rounded font-mono">John</code>
+                <code className="px-2.5 py-1 bg-muted rounded-lg font-mono">John Doe</code>
                 <span>or select a department</span>
               </div>
             </div>
@@ -1210,4 +1142,3 @@ export default function EmployeeReportsPage() {
     </div>
   );
 }
-
