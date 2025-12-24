@@ -70,8 +70,6 @@ export function Preloader() {
 
     const TOTAL_DURATION = 3000; // 3 seconds in milliseconds
     const UPDATE_INTERVAL = 16; // ~60fps for smooth animation
-    const TOTAL_STEPS = TOTAL_DURATION / UPDATE_INTERVAL;
-    const PROGRESS_INCREMENT = 100 / TOTAL_STEPS;
 
     let currentProgress = 0;
     let lastMessageIndex = -1;
@@ -118,7 +116,7 @@ export function Preloader() {
         clearInterval(glitchIntervalRef.current);
       }
     };
-  }, [mounted, glitchText]);
+  }, [mounted, glitchText, messages]);
 
   if (isComplete) return null;
   if (!mounted) return null;
