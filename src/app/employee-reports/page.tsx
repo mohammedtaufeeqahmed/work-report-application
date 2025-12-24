@@ -10,8 +10,9 @@ import {
   TrendingUp, Clock, CheckCircle2, CalendarDays, Building2, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { WorkReport, SessionUser, WorkStatus, EditPermissions, Department } from '@/types';
+import type { WorkReport, SessionUser, WorkStatus, EditPermissions, Department, Holiday } from '@/types';
 import { getISTTodayRange, getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, convertUTCToISTDate } from '@/lib/date';
+import { logger } from '@/lib/logger';
 import { WorkReportCalendar } from '@/components/work-report-calendar';
 
 export default function EmployeeReportsPage() {
@@ -41,7 +42,7 @@ export default function EmployeeReportsPage() {
   // Scrum board state
   const [managerDepartments, setManagerDepartments] = useState<Department[]>([]);
   const [viewMode, setViewMode] = useState<'scrum' | 'list'>('scrum');
-  const [holidays, setHolidays] = useState<string[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   const canSearchOthers = session?.role === 'admin' || session?.role === 'superadmin' || session?.role === 'manager';
   const isManager = session?.role === 'manager';
@@ -134,7 +135,7 @@ export default function EmployeeReportsPage() {
                 setManagerDepartments(deptData.data);
               }
             } catch (err) {
-              console.error('Failed to fetch manager departments:', err);
+              logger.error('Failed to fetch manager departments:', err);
             }
           }
           
@@ -159,7 +160,7 @@ export default function EmployeeReportsPage() {
           setEditPermissions(permissionsData.data);
         }
       } catch (err) {
-        console.error('Failed to fetch session:', err);
+        logger.error('Failed to fetch session:', err);
       } finally {
         setSessionLoading(false);
       }
@@ -171,13 +172,13 @@ export default function EmployeeReportsPage() {
   useEffect(() => {
     const fetchHolidays = async () => {
       try {
-        const response = await fetch('/api/holidays');
+        const response = await fetch('/api/holidays?full=true');
         const data = await response.json();
         if (data.success) {
           setHolidays(data.data || []);
         }
       } catch (error) {
-        console.error('Failed to fetch holidays:', error);
+        logger.error('Failed to fetch holidays:', error);
       }
     };
     fetchHolidays();
@@ -298,7 +299,7 @@ export default function EmployeeReportsPage() {
       return isLate;
     } catch (error) {
       // If date conversion fails, don't mark as late (fail-safe)
-      console.error('Error checking late submission:', error);
+      logger.error('Error checking late submission:', error);
       return false;
     }
   }, []);

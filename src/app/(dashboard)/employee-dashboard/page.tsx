@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import type { WorkReport, SessionUser, WorkStatus, EditPermissions } from '@/types';
+import type { WorkReport, SessionUser, WorkStatus, EditPermissions, Holiday } from '@/types';
 import { getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, getDayOfMonthIST, convertUTCToISTDate } from '@/lib/date';
 import { logger } from '@/lib/logger';
 import { WorkReportCalendar } from '@/components/work-report-calendar';
@@ -40,7 +40,7 @@ export default function EmployeeDashboardPage() {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [editPermissions, setEditPermissions] = useState<EditPermissions | null>(null);
-  const [holidays, setHolidays] = useState<string[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   // Edit state
   const [editingReport, setEditingReport] = useState<WorkReport | null>(null);
@@ -84,7 +84,7 @@ export default function EmployeeDashboardPage() {
           setEditPermissions(permissionsData.data);
         }
       } catch (err) {
-        console.error('Failed to fetch session:', err);
+        logger.error('Failed to fetch session:', err);
       } finally {
         setSessionLoading(false);
       }
@@ -123,13 +123,13 @@ export default function EmployeeDashboardPage() {
   useEffect(() => {
     const fetchHolidays = async () => {
       try {
-        const response = await fetch('/api/holidays');
+        const response = await fetch('/api/holidays?full=true');
         const data = await response.json();
         if (data.success) {
           setHolidays(data.data || []);
         }
       } catch (error) {
-        console.error('Failed to fetch holidays:', error);
+        logger.error('Failed to fetch holidays:', error);
       }
     };
     fetchHolidays();

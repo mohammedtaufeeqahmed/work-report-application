@@ -185,10 +185,7 @@ export default function HolidaysPage() {
     }
   };
 
-  // Get holiday dates for calendar
-  const holidayDates = useMemo(() => {
-    return holidays.map(h => h.date);
-  }, [holidays]);
+  // Holidays are already in the correct format for calendar
 
   // Loading state
   if (sessionLoading) {
@@ -448,7 +445,7 @@ export default function HolidaysPage() {
             <div className="lg:sticky lg:top-20 h-fit">
               <WorkReportCalendar 
                 reports={[]} 
-                holidays={holidayDates}
+                holidays={holidays}
               />
             </div>
           </div>

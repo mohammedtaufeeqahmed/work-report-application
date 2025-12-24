@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { WorkReport } from '@/types';
+import type { WorkReport, Holiday } from '@/types';
 import { 
   getISTNow, 
   getISTTodayDateString, 
@@ -12,7 +12,7 @@ import {
 
 interface WorkReportCalendarProps {
   reports: WorkReport[];
-  holidays?: string[]; // Array of holiday dates in YYYY-MM-DD format
+  holidays?: Holiday[]; // Array of holiday objects with names
   onDateClick?: (date: string) => void;
 }
 
@@ -32,8 +32,24 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
     return map;
   }, [reports]);
 
-  // Create a set of holidays for quick lookup
-  const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
+  // Create a map of holidays by date (with names) for quick lookup
+  const holidaysMap = useMemo(() => {
+    const map = new Map<string, Holiday>();
+    holidays.forEach(holiday => {
+      map.set(holiday.date, holiday);
+    });
+    return map;
+  }, [holidays]);
+
+  // Create a set of holiday dates for quick lookup
+  const holidaysSet = useMemo(() => new Set(holidays.map(h => h.date)), [holidays]);
+
+  // Helper function to check if a date is Sunday
+  const isSunday = useCallback((dateStr: string): boolean => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getDay() === 0; // 0 = Sunday
+  }, []);
 
   // Get first day of month and number of days
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
@@ -54,8 +70,13 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
   };
 
   // Get date status for color coding
-  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'holiday' | 'future' => {
-    // Check if it's a holiday first
+  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'holiday' | 'sunday' | 'future' => {
+    // Check if it's Sunday first (Sunday is always a holiday)
+    if (isSunday(dateStr)) {
+      return 'sunday';
+    }
+
+    // Check if it's a marked holiday
     if (holidaysSet.has(dateStr)) {
       return 'holiday';
     }
@@ -96,6 +117,8 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
     const isToday = dateStr === today;
 
     switch (status) {
+      case 'sunday':
+        return `bg-gray-500 text-white ${isToday ? 'ring-2 ring-gray-400 ring-offset-2' : ''}`;
       case 'holiday':
         return `bg-gradient-to-br from-violet-500 to-purple-600 text-white ${isToday ? 'ring-2 ring-violet-400 ring-offset-2' : ''}`;
       case 'working':
@@ -103,7 +126,8 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
       case 'leave':
         return `bg-orange-500 text-white ${isToday ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`;
       case 'working_on_duty':
-        return `bg-gradient-to-br from-red-500 to-blue-600 text-white ${isToday ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`;
+        // Diagonal split will be handled with absolute positioning
+        return `relative overflow-hidden ${isToday ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`;
       case 'not_submitted':
         return `bg-red-500 text-white ${isToday ? 'ring-2 ring-red-400 ring-offset-2' : ''}`;
       case 'future':
@@ -112,6 +136,31 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
         return 'text-foreground';
     }
   };
+
+  // Get tooltip text for date
+  const getTooltipText = useCallback((dateStr: string): string => {
+    const status = getDateStatus(dateStr);
+    
+    if (status === 'sunday') {
+      return `${dateStr} - Sunday (Holiday)`;
+    }
+    
+    if (status === 'holiday') {
+      const holiday = holidaysMap.get(dateStr);
+      const holidayName = holiday?.name || 'Holiday';
+      return `${dateStr} - ${holidayName}`;
+    }
+    
+    const statusLabels: Record<string, string> = {
+      'working': 'Working',
+      'leave': 'Leave',
+      'working_on_duty': 'Working + On Duty',
+      'not_submitted': 'Not Submitted',
+      'future': 'Future'
+    };
+    
+    return `${dateStr} - ${statusLabels[status] || 'Unknown'}`;
+  }, [holidaysMap, getDateStatus]);
 
   // Generate calendar days
   const calendarDays = useMemo(() => {
@@ -213,6 +262,7 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
           {calendarDays.map(({ dateStr, day, isCurrentMonth }) => {
             const status = getDateStatus(dateStr);
             const isToday = dateStr === today;
+            const isWorkingOnDuty = status === 'working_on_duty';
             
             return (
               <button
@@ -220,15 +270,23 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
                 onClick={() => onDateClick?.(dateStr)}
                 className={`
                   aspect-square rounded-xl text-sm font-semibold transition-all duration-200
-                  hover:scale-110 active:scale-95 hover:shadow-md
+                  hover:scale-110 active:scale-95 hover:shadow-md relative
                   ${getDateColorClass(dateStr, isCurrentMonth)}
                   ${!isCurrentMonth ? 'opacity-30' : ''}
                   ${onDateClick ? 'cursor-pointer' : 'cursor-default'}
                   ${status === 'future' ? 'hover:bg-muted/30' : ''}
                 `}
-                title={`${dateStr} - ${status === 'holiday' ? 'Holiday' : status === 'working' ? 'Working' : status === 'leave' ? 'Leave' : status === 'working_on_duty' ? 'Working + On Duty' : status === 'not_submitted' ? 'Not Submitted' : 'Future'}`}
+                title={getTooltipText(dateStr)}
               >
-                {day}
+                {/* Diagonal split for working_on_duty: green (top-left) and blue (bottom-right) */}
+                {isWorkingOnDuty && (
+                  <>
+                    <div className="absolute inset-0 bg-emerald-500" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
+                    <div className="absolute inset-0 bg-blue-600" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
+                    <span className="relative z-10 text-white">{day}</span>
+                  </>
+                )}
+                {!isWorkingOnDuty && <span>{day}</span>}
               </button>
             );
           })}
@@ -251,10 +309,17 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
               <span className="text-muted-foreground font-medium">Not Submitted</span>
             </div>
             <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-red-500 to-blue-600 shadow-sm"></div>
+              <div className="w-4 h-4 rounded-md relative overflow-hidden">
+                <div className="absolute inset-0 bg-emerald-500" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
+                <div className="absolute inset-0 bg-blue-600" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
+              </div>
               <span className="text-muted-foreground font-medium">On Duty</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors col-span-2">
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div className="w-4 h-4 rounded-md bg-gray-500 shadow-sm"></div>
+              <span className="text-muted-foreground font-medium">Sunday</span>
+            </div>
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
               <div className="w-4 h-4 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 shadow-sm"></div>
               <span className="text-muted-foreground font-medium">Holiday</span>
             </div>
@@ -277,8 +342,8 @@ export const WorkReportCalendar = memo(WorkReportCalendarComponent, (prevProps, 
   if (prevReportIds !== nextReportIds) return false;
   
   // Check if holidays have changed
-  const prevHolidays = prevProps.holidays?.join(',') || '';
-  const nextHolidays = nextProps.holidays?.join(',') || '';
+  const prevHolidays = prevProps.holidays?.map(h => `${h.id}-${h.date}`).join(',') || '';
+  const nextHolidays = nextProps.holidays?.map(h => `${h.id}-${h.date}`).join(',') || '';
   if (prevHolidays !== nextHolidays) return false;
   
   return true; // Props are equal, skip re-render
