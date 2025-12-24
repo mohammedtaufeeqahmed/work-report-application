@@ -89,10 +89,11 @@ export function Preloader() {
         glitchText(nextMessage);
       }
 
-      if (currentProgress === 100) {
+      if (currentProgress >= 100) {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
         }
+        setProgress(100);
         setTimeout(() => {
           setIsComplete(true);
         }, 800);
