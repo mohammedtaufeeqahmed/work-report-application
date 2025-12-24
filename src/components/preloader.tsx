@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 
 export function Preloader() {
@@ -26,8 +26,8 @@ export function Preloader() {
 
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
 
-  // Glitch text effect
-  const glitchText = (targetText: string) => {
+  // Glitch text effect - using useCallback to stabilize the function
+  const glitchText = useCallback((targetText: string) => {
     if (!typewriterRef.current) return;
     
     let iteration = 0;
@@ -56,7 +56,7 @@ export function Preloader() {
       
       iteration += 1 / 2;
     }, 30);
-  };
+  }, []);
 
   // Initialize
   useEffect(() => {
@@ -69,6 +69,7 @@ export function Preloader() {
     if (!mounted) return;
 
     let currentProgress = 0;
+    let lastMessageIndex = -1;
 
     progressIntervalRef.current = setInterval(() => {
       currentProgress += Math.random() * 3;
@@ -83,8 +84,10 @@ export function Preloader() {
       if (currentProgress > 75) nextMsgIndex = 3;
       if (currentProgress > 95) nextMsgIndex = 4;
 
-      const nextMessage = messages[nextMsgIndex];
-      if (nextMessage !== currentMessage) {
+      // Only update message if index changed
+      if (nextMsgIndex !== lastMessageIndex) {
+        lastMessageIndex = nextMsgIndex;
+        const nextMessage = messages[nextMsgIndex];
         setCurrentMessage(nextMessage);
         glitchText(nextMessage);
       }
@@ -108,7 +111,7 @@ export function Preloader() {
         clearInterval(glitchIntervalRef.current);
       }
     };
-  }, [mounted, currentMessage]);
+  }, [mounted]);
 
   if (isComplete) return null;
   if (!mounted) return null;
