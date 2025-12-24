@@ -1,260 +1,243 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from 'next-themes';
 
 export function Preloader() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('INITIALIZING');
+  const [currentMessage, setCurrentMessage] = useState('INIT_SYSTEM');
   const [isComplete, setIsComplete] = useState(false);
-  const animationFrameRef = useRef<number | undefined>(undefined);
-  const progressFrameRef = useRef<number | undefined>(undefined);
+  const [mounted, setMounted] = useState(false);
+  const { theme, resolvedTheme } = useTheme();
+  const glitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const typewriterRef = useRef<HTMLSpanElement>(null);
 
-  const states = [
-    'INITIALIZING CORE',
-    'LOADING ASSETS',
-    'VERIFYING INTEGRITY',
-    'ESTABLISHING UPLINK',
-    'RENDERING UI',
+  // Determine if dark mode
+  const isDark = mounted && (resolvedTheme === 'dark' || theme === 'dark');
+
+  const messages = [
+    'ESTABLISHING_CONNECTION',
+    'PARSING_USER_DATA',
+    'BUILDING_CHARTS',
+    'OPTIMIZING_LAYOUT',
+    'READY_TO_LAUNCH'
   ];
 
-  // 3D Sphere Animation
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let width = 0;
-    let height = 0;
-    const sphereRadius = 250;
-    const numParticles = 300;
-
-    let angleX = 0;
-    let angleY = 0;
-
-    interface Point3D {
-      x: number;
-      y: number;
-      z: number;
-      baseSize: number;
-      project(ax: number, ay: number): { x: number; y: number; s: number };
+  // Glitch text effect
+  const glitchText = (targetText: string) => {
+    if (!typewriterRef.current) return;
+    
+    let iteration = 0;
+    if (glitchIntervalRef.current) {
+      clearInterval(glitchIntervalRef.current);
     }
-
-    class Point3DImpl implements Point3D {
-      x: number;
-      y: number;
-      z: number;
-      baseSize: number;
-
-      constructor() {
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(Math.random() * 2 - 1);
-
-        this.x = sphereRadius * Math.sin(phi) * Math.cos(theta);
-        this.y = sphereRadius * Math.sin(phi) * Math.sin(theta);
-        this.z = sphereRadius * Math.cos(phi);
-        this.baseSize = Math.random() * 1.5 + 0.5;
-      }
-
-      project(ax: number, ay: number) {
-        let x1 = this.x * Math.cos(ay) - this.z * Math.sin(ay);
-        let z1 = this.x * Math.sin(ay) + this.z * Math.cos(ay);
-
-        let y1 = this.y * Math.cos(ax) - z1 * Math.sin(ax);
-        let z2 = this.y * Math.sin(ax) + z1 * Math.cos(ax);
-
-        const scale = 500 / (500 + z2);
-        const x2D = x1 * scale + width / 2;
-        const y2D = y1 * scale + height / 2;
-
-        return { x: x2D, y: y2D, s: scale };
-      }
-    }
-
-    function resize() {
-      if (typeof window === 'undefined' || !canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    }
-
-    if (typeof window !== 'undefined') {
-      resize();
-      window.addEventListener('resize', resize);
-    }
-
-    const particles: Point3D[] = [];
-    for (let i = 0; i < numParticles; i++) {
-      particles.push(new Point3DImpl());
-    }
-
-    function animate() {
-      if (!ctx) return;
-      ctx.clearRect(0, 0, width, height);
-
-      angleY += 0.003;
-      angleX += 0.002;
-
-      ctx.fillStyle = '#fff';
-
-      particles.forEach((p) => {
-        const proj = p.project(angleX, angleY);
-        const alpha = (proj.s - 0.5) * 1.5;
-        if (alpha > 0) {
-          ctx.globalAlpha = Math.min(alpha, 0.8);
-          ctx.beginPath();
-          ctx.arc(proj.x, proj.y, p.baseSize * proj.s, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      });
-
-      ctx.lineWidth = 0.3;
-      for (let i = 0; i < particles.length; i += 2) {
-        const p1 = particles[i].project(angleX, angleY);
-        if (p1.s < 0.6) continue;
-
-        for (let j = i + 1; j < particles.length; j += 5) {
-          const p2 = particles[j].project(angleX, angleY);
-          if (p2.s < 0.6) continue;
-
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < 60) {
-            ctx.strokeStyle = `rgba(255,255,255, ${0.15 * (1 - dist / 60)})`;
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
+    
+    glitchIntervalRef.current = setInterval(() => {
+      if (!typewriterRef.current) return;
+      
+      typewriterRef.current.textContent = targetText
+        .split('')
+        .map((letter, index) => {
+          if (index < iteration) {
+            return targetText[index];
           }
+          return chars[Math.floor(Math.random() * chars.length)];
+        })
+        .join('');
+      
+      if (iteration >= targetText.length) {
+        if (glitchIntervalRef.current) {
+          clearInterval(glitchIntervalRef.current);
         }
       }
+      
+      iteration += 1 / 2;
+    }, 30);
+  };
 
-      animationFrameRef.current = requestAnimationFrame(animate);
-    }
-
-    animate();
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('resize', resize);
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
+  // Initialize
+  useEffect(() => {
+    setMounted(true);
+    glitchText(messages[0]);
   }, []);
 
-  // Data Stream Simulation
+  // Progress logic
   useEffect(() => {
-    const leftLog = document.getElementById('log-left');
-    const rightLog = document.getElementById('log-right');
-    if (!leftLog || !rightLog) return;
+    if (!mounted) return;
 
-    const vocab = ['ALLOC', 'MEM_OK', 'SYS_0X', 'PACKET', 'LINK', 'VIRT', 'PROXY', 'KERNEL'];
-
-    function addLogLine(container: HTMLElement, align: 'left' | 'right') {
-      const line = document.createElement('div');
-      line.className = 'sys-row';
-      const hex = '0x' + Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0');
-      const kw = vocab[Math.floor(Math.random() * vocab.length)];
-      const val = Math.floor(Math.random() * 999);
-
-      if (align === 'left') line.innerText = `> ${kw} :: ${hex}`;
-      else line.innerText = `[${val}ms] ${hex}`;
-
-      container.appendChild(line);
-
-      if (container.children.length > 6 && container.firstChild) {
-        container.removeChild(container.firstChild);
-      }
-    }
-
-    const leftInterval = setInterval(() => addLogLine(leftLog, 'left'), 400);
-    const rightInterval = setInterval(() => addLogLine(rightLog, 'right'), 650);
-
-    return () => {
-      clearInterval(leftInterval);
-      clearInterval(rightInterval);
-    };
-  }, []);
-
-  // Progress Logic
-  useEffect(() => {
     let currentProgress = 0;
 
-    function frame() {
-      currentProgress += Math.random() * 0.8;
+    progressIntervalRef.current = setInterval(() => {
+      currentProgress += Math.random() * 3;
       if (currentProgress > 100) currentProgress = 100;
 
       setProgress(currentProgress);
 
-      const stateIdx = Math.min(Math.floor((currentProgress / 100) * states.length), states.length - 1);
-      setStatus(states[stateIdx]);
+      // Update message based on progress
+      let nextMsgIndex = 0;
+      if (currentProgress > 20) nextMsgIndex = 1;
+      if (currentProgress > 50) nextMsgIndex = 2;
+      if (currentProgress > 75) nextMsgIndex = 3;
+      if (currentProgress > 95) nextMsgIndex = 4;
 
-      if (currentProgress < 100) {
-        progressFrameRef.current = requestAnimationFrame(frame);
-      } else {
-        setTimeout(() => {
-          setStatus('COMPLETE');
-          setTimeout(() => {
-            setIsComplete(true);
-          }, 1000);
-        }, 500);
+      const nextMessage = messages[nextMsgIndex];
+      if (nextMessage !== currentMessage) {
+        setCurrentMessage(nextMessage);
+        glitchText(nextMessage);
       }
-    }
 
-    progressFrameRef.current = requestAnimationFrame(frame);
+      if (currentProgress === 100) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+        }
+        setTimeout(() => {
+          setIsComplete(true);
+        }, 800);
+      }
+    }, 80);
 
     return () => {
-      if (progressFrameRef.current) {
-        cancelAnimationFrame(progressFrameRef.current);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (glitchIntervalRef.current) {
+        clearInterval(glitchIntervalRef.current);
       }
     };
-  }, []);
+  }, [mounted, currentMessage]);
 
   if (isComplete) return null;
+  if (!mounted) return null;
 
   return (
-    <div
-      id="preloader"
-      style={{
-        opacity: isComplete ? 0 : 1,
-        transform: isComplete ? 'scale(1.05)' : 'scale(1)',
-      }}
-    >
-      <canvas ref={canvasRef} id="canvas-layer" />
-      <div className="ui-layer">
-        <div className="corner tl" />
-        <div className="corner tr" />
-        <div className="corner bl" />
-        <div className="corner br" />
-        <div className="stream-col stream-left" id="log-left" />
-        <div className="stream-col stream-right" id="log-right" />
+    <>
+      {/* Ambient Background Orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-[1000]">
+        <div className={`orb orb-1 ${isDark ? 'orb-dark' : 'orb-light'}`}></div>
+        <div className={`orb orb-2 ${isDark ? 'orb-dark' : 'orb-light'}`}></div>
       </div>
-      <div className="center-stage">
-        <div className="reactor-ring">
-          <div className="circle c1" />
-          <div className="circle c2" />
-          <div className="circle c3" />
-          <div className="core" />
-        </div>
-        <div className="title-block">
-          <h1 className="brand">WorkReport</h1>
-          <div className="status-line">
-            <span id="system-status">{status}</span>
-          </div>
-          <div className="progress-container">
-            <div className="progress-fill" id="bar" style={{ width: `${progress}%` }} />
-            <div className="progress-num" id="num">
-              {Math.floor(progress).toString().padStart(2, '0')}
+
+      {/* Preloader */}
+      <div
+        id="preloader"
+        className={`preloader-container ${isDark ? 'preloader-dark' : 'preloader-light'} ${isComplete ? 'loader-exit-zoom' : ''}`}
+      >
+        {/* 3D Card Wrapper */}
+        <div className="card-container relative mb-12">
+          {/* Glassy Card Backing */}
+          <div className={`absolute inset-0 backdrop-blur-md rounded-xl shadow-2xl border transform translate-z-[-10px] ${
+            isDark 
+              ? 'bg-zinc-900/60 border-white/10' 
+              : 'bg-white/60 border-black/10'
+          }`}></div>
+          
+          {/* Icon Container */}
+          <div className={`relative w-32 h-40 rounded-xl shadow-lg border flex items-center justify-center overflow-hidden ${
+            isDark 
+              ? 'bg-black border-zinc-800' 
+              : 'bg-white border-gray-300'
+          }`}>
+            
+            {/* The Scanner Beam */}
+            <div className={`scan-beam ${isDark ? 'scan-beam-dark' : 'scan-beam-light'}`}></div>
+
+            {/* Floating Particles */}
+            <div className="absolute inset-0 overflow-hidden">
+              <div className={`particle ${isDark ? 'dark' : 'light'}`} style={{ left: '20%', animationDelay: '0s' }}></div>
+              <div className={`particle ${isDark ? 'dark' : 'light'}`} style={{ left: '70%', animationDelay: '1.2s' }}></div>
+              <div className={`particle ${isDark ? 'dark' : 'light'}`} style={{ left: '50%', animationDelay: '0.5s' }}></div>
+              <div className={`particle ${isDark ? 'dark' : 'light'}`} style={{ left: '80%', animationDelay: '2.1s' }}></div>
+              <div className={`particle ${isDark ? 'dark' : 'light'}`} style={{ left: '30%', animationDelay: '1.8s' }}></div>
             </div>
+
+            {/* The Document SVG */}
+            <svg className="w-20 h-20 relative z-10" viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g strokeLinecap="round" strokeLinejoin="round">
+                {/* Header Line */}
+                <line 
+                  x1="12" 
+                  y1="15" 
+                  x2="32" 
+                  y2="15" 
+                  strokeWidth="3" 
+                  className={`reveal-path delay-1 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`}
+                />
+                
+                {/* Mini Avatar Circle */}
+                <circle 
+                  cx="50" 
+                  cy="15" 
+                  r="4" 
+                  strokeWidth="2" 
+                  className={`reveal-path delay-1 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`}
+                />
+
+                {/* Chart Line */}
+                <path 
+                  d="M12 40 L20 32 L28 36 L40 20 L52 28" 
+                  strokeWidth="2.5" 
+                  className={`reveal-path delay-2 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`}
+                />
+                
+                {/* Bar Chart Area (Bottom) */}
+                <line x1="12" y1="55" x2="12" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+                <line x1="20" y1="50" x2="20" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+                <line x1="28" y1="58" x2="28" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+                <line x1="36" y1="45" x2="36" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+                <line x1="44" y1="52" x2="44" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+                <line x1="52" y1="60" x2="52" y2="65" strokeWidth="3" className={`reveal-path delay-3 ${isDark ? 'stroke-dark reveal-anim' : 'stroke-light reveal-anim'}`} />
+              </g>
+            </svg>
+          </div>
+          
+          {/* Reflection/Gloss */}
+          <div className={`absolute inset-0 rounded-xl bg-gradient-to-tr pointer-events-none ${
+            isDark ? 'from-white/10' : 'from-black/5'
+          } to-transparent`}></div>
+        </div>
+
+        {/* Text & Status */}
+        <div className="text-center z-10">
+          <h2 className={`text-2xl font-semibold tracking-tight mb-2 ${
+            isDark ? 'text-white' : 'text-black'
+          }`}>
+            Work Report
+          </h2>
+          <div className="h-6 flex items-center justify-center">
+            <span 
+              ref={typewriterRef}
+              className={`mono-text text-xs font-medium uppercase tracking-widest ${
+                isDark ? 'text-zinc-400' : 'text-gray-600'
+              }`}
+            >
+              {currentMessage}
+            </span>
+            <span className={`animate-pulse ml-1 ${isDark ? 'text-white' : 'text-black'}`}>_</span>
           </div>
         </div>
+
+        {/* Progress Ring */}
+        <div className="absolute bottom-10">
+          <div className={`w-12 h-1 rounded-full overflow-hidden ${
+            isDark ? 'bg-zinc-800' : 'bg-gray-200'
+          }`}>
+            <div 
+              className={`h-full transition-all duration-200 ${
+                isDark ? 'bg-white' : 'bg-black'
+              }`}
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <p className={`text-[10px] text-center mt-2 font-mono ${
+            isDark ? 'text-zinc-500' : 'text-gray-500'
+          }`}>
+            {Math.floor(progress)}%
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
-

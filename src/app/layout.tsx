@@ -62,13 +62,13 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/logo_72x72.png" />
       </head>
       <body className={`${inter.variable} ${syncopate.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background`}>
-        <Preloader />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
+          <Preloader />
           <Navbar />
           <main>{children}</main>
           <Toaster position="top-right" />
