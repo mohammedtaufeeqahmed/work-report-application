@@ -3,28 +3,27 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 
+// Move constants outside component to prevent recreation
+const MESSAGES = [
+  'ESTABLISHING_CONNECTION',
+  'PARSING_USER_DATA',
+  'BUILDING_CHARTS',
+  'OPTIMIZING_LAYOUT',
+  'READY_TO_LAUNCH'
+] as const;
+
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
+
 export function Preloader() {
   const [progress, setProgress] = useState(0);
   const [currentMessage, setCurrentMessage] = useState('INIT_SYSTEM');
   const [isComplete, setIsComplete] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const { theme, resolvedTheme } = useTheme();
   const glitchIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const typewriterRef = useRef<HTMLSpanElement>(null);
-
-  // Determine if dark mode
-  const isDark = mounted && (resolvedTheme === 'dark' || theme === 'dark');
-
-  const messages = [
-    'ESTABLISHING_CONNECTION',
-    'PARSING_USER_DATA',
-    'BUILDING_CHARTS',
-    'OPTIMIZING_LAYOUT',
-    'READY_TO_LAUNCH'
-  ];
-
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
 
   // Glitch text effect - using useCallback to stabilize the function
   const glitchText = useCallback((targetText: string) => {
@@ -44,7 +43,7 @@ export function Preloader() {
           if (index < iteration) {
             return targetText[index];
           }
-          return chars[Math.floor(Math.random() * chars.length)];
+          return CHARS[Math.floor(Math.random() * CHARS.length)];
         })
         .join('');
       
@@ -58,11 +57,49 @@ export function Preloader() {
     }, 30);
   }, []);
 
-  // Initialize
+  // Initialize and detect theme
   useEffect(() => {
     setMounted(true);
-    glitchText(messages[0]);
-  }, []);
+    glitchText(MESSAGES[0]);
+    
+    // Detect theme from document or default to light
+    const detectTheme = () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const html = document.documentElement;
+          const hasDark = html.classList.contains('dark');
+          setIsDark(hasDark);
+        }
+      } catch (e) {
+        setIsDark(false);
+      }
+    };
+    
+    detectTheme();
+    
+    // Listen to theme changes via MutationObserver
+    if (typeof window !== 'undefined') {
+      const observer = new MutationObserver(() => {
+        detectTheme();
+      });
+      
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      
+      return () => observer.disconnect();
+    }
+  }, [glitchText]);
+  
+  // Update theme when useTheme values change
+  useEffect(() => {
+    if (resolvedTheme) {
+      setIsDark(resolvedTheme === 'dark');
+    } else if (theme) {
+      setIsDark(theme === 'dark');
+    }
+  }, [theme, resolvedTheme]);
 
   // Progress logic - Fixed 3 seconds duration
   useEffect(() => {
@@ -91,7 +128,7 @@ export function Preloader() {
       // Only update message if index changed
       if (nextMsgIndex !== lastMessageIndex) {
         lastMessageIndex = nextMsgIndex;
-        const nextMessage = messages[nextMsgIndex];
+        const nextMessage = MESSAGES[nextMsgIndex];
         setCurrentMessage(nextMessage);
         glitchText(nextMessage);
       }
@@ -116,10 +153,23 @@ export function Preloader() {
         clearInterval(glitchIntervalRef.current);
       }
     };
-  }, [mounted, glitchText, messages]);
+  }, [mounted, glitchText]);
 
+  // Always show preloader until complete, even if not mounted (prevents flash)
   if (isComplete) return null;
-  if (!mounted) return null;
+  
+  // Show a minimal preloader while mounting to prevent blank screen
+  if (!mounted) {
+    return (
+      <div className="preloader-container preloader-light">
+        <div className="text-center z-10">
+          <h2 className="text-2xl font-semibold tracking-tight mb-2 text-black">
+            Work Report
+          </h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
