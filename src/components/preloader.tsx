@@ -64,16 +64,22 @@ export function Preloader() {
     glitchText(messages[0]);
   }, []);
 
-  // Progress logic
+  // Progress logic - Fixed 3 seconds duration
   useEffect(() => {
     if (!mounted) return;
 
+    const TOTAL_DURATION = 3000; // 3 seconds in milliseconds
+    const UPDATE_INTERVAL = 16; // ~60fps for smooth animation
+    const TOTAL_STEPS = TOTAL_DURATION / UPDATE_INTERVAL;
+    const PROGRESS_INCREMENT = 100 / TOTAL_STEPS;
+
     let currentProgress = 0;
     let lastMessageIndex = -1;
+    let startTime = Date.now();
 
     progressIntervalRef.current = setInterval(() => {
-      currentProgress += Math.random() * 3;
-      if (currentProgress > 100) currentProgress = 100;
+      const elapsed = Date.now() - startTime;
+      currentProgress = Math.min((elapsed / TOTAL_DURATION) * 100, 100);
 
       setProgress(currentProgress);
 
@@ -97,11 +103,12 @@ export function Preloader() {
           clearInterval(progressIntervalRef.current);
         }
         setProgress(100);
+        // Small delay before hiding to show completion
         setTimeout(() => {
           setIsComplete(true);
-        }, 800);
+        }, 200);
       }
-    }, 80);
+    }, UPDATE_INTERVAL);
 
     return () => {
       if (progressIntervalRef.current) {
@@ -111,7 +118,7 @@ export function Preloader() {
         clearInterval(glitchIntervalRef.current);
       }
     };
-  }, [mounted]);
+  }, [mounted, glitchText]);
 
   if (isComplete) return null;
   if (!mounted) return null;
