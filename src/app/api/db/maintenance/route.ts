@@ -4,6 +4,7 @@ import {
   healthCheck
 } from '@/lib/db/database';
 import { clearQueueHistory, getQueueStatus } from '@/lib/queue/work-report-queue';
+import { logger } from '@/lib/logger';
 import type { ApiResponse } from '@/types';
 
 export interface MaintenanceResult {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     const url = new URL(request.url);
     const doClearQueue = url.searchParams.get('clearQueue') === 'true';
     
-    console.log('[Maintenance] Starting database maintenance...');
+    logger.info('[Maintenance] Starting database maintenance...');
     
     const result: MaintenanceResult = {
       vacuum: { success: true, message: 'PostgreSQL handles vacuuming automatically (autovacuum)' },
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     
     // Clear queue history if requested
     if (doClearQueue) {
-      console.log('[Maintenance] Clearing queue history...');
+      logger.info('[Maintenance] Clearing queue history...');
       const queueStatusBefore = getQueueStatus();
       const itemsBeforeCleanup = queueStatusBefore.completed + queueStatusBefore.failed;
       clearQueueHistory();
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
       poolWaitingCount: finalStats.poolWaitingCount,
     };
     
-    console.log('[Maintenance] Database maintenance completed:', result);
+    logger.info('[Maintenance] Database maintenance completed:', result);
     
     return NextResponse.json<ApiResponse<MaintenanceResult>>({
       success: true,

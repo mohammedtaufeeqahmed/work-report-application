@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getEmployeeByEmail } from '@/lib/db/queries';
 import { setSessionCookie, employeeToSessionUser } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import type { ApiResponse } from '@/types';
 
 // Get JWT secret for state token verification
@@ -98,7 +99,7 @@ function isEmailDomainAllowed(email: string): boolean {
   
   if (!allowedDomains) {
     // If no domains are configured, allow all (not recommended for production)
-    console.warn('GOOGLE_ALLOWED_DOMAINS is not configured. Allowing all domains.');
+    logger.warn('GOOGLE_ALLOWED_DOMAINS is not configured. Allowing all domains.');
     return true;
   }
 

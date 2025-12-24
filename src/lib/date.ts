@@ -125,14 +125,27 @@ export function convertUTCToISTDate(utcDatetime: string): string {
   let date: Date;
   
   if (utcDatetime.includes('T')) {
-    // ISO format
-    date = new Date(utcDatetime);
+    // ISO format - ensure it's treated as UTC
+    // If it doesn't end with 'Z', add it to ensure UTC parsing
+    const isoString = utcDatetime.endsWith('Z') ? utcDatetime : utcDatetime + 'Z';
+    date = new Date(isoString);
   } else if (utcDatetime.includes(' ')) {
-    // SQLite format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
+    // SQLite/PostgreSQL format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
     date = new Date(utcDatetime.replace(' ', 'T') + 'Z');
   } else {
     // Just date: "YYYY-MM-DD"
     return utcDatetime;
+  }
+  
+  // Validate the date
+  if (isNaN(date.getTime())) {
+    // If parsing failed, try to extract just the date part
+    const dateMatch = utcDatetime.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch) {
+      return dateMatch[1];
+    }
+    // Fallback: return today's date
+    return getISTTodayDateString();
   }
   
   // Convert to IST by adding 5:30 hours

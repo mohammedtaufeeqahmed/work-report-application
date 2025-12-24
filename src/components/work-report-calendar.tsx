@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { WorkReport } from '@/types';
@@ -16,7 +16,7 @@ interface WorkReportCalendarProps {
   onDateClick?: (date: string) => void;
 }
 
-export function WorkReportCalendar({ reports, holidays = [], onDateClick }: WorkReportCalendarProps) {
+function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: WorkReportCalendarProps) {
   const [currentDate, setCurrentDate] = useState(getISTNow());
   
   const currentYear = currentDate.getFullYear();
@@ -264,4 +264,23 @@ export function WorkReportCalendar({ reports, holidays = [], onDateClick }: Work
     </div>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const WorkReportCalendar = memo(WorkReportCalendarComponent, (prevProps, nextProps) => {
+  // Only re-render if reports or holidays actually change
+  if (prevProps.reports.length !== nextProps.reports.length) return false;
+  if (prevProps.holidays?.length !== nextProps.holidays?.length) return false;
+  
+  // Check if reports have changed
+  const prevReportIds = prevProps.reports.map(r => `${r.id}-${r.date}`).join(',');
+  const nextReportIds = nextProps.reports.map(r => `${r.id}-${r.date}`).join(',');
+  if (prevReportIds !== nextReportIds) return false;
+  
+  // Check if holidays have changed
+  const prevHolidays = prevProps.holidays?.join(',') || '';
+  const nextHolidays = nextProps.holidays?.join(',') || '';
+  if (prevHolidays !== nextHolidays) return false;
+  
+  return true; // Props are equal, skip re-render
+});
 

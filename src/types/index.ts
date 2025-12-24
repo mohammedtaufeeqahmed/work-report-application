@@ -96,6 +96,16 @@ export interface PasswordResetToken {
   createdAt: string;
 }
 
+// Holiday type
+export interface Holiday {
+  id: number;
+  date: string; // YYYY-MM-DD format
+  name: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Session user type (for JWT payload)
 export interface SessionUser {
   id: number;
@@ -212,6 +222,7 @@ export interface PageAccess {
   admin_dashboard: boolean;
   super_admin_dashboard: boolean;
   mark_attendance: boolean; // Permission to mark employees as absent
+  mark_holidays: boolean; // Permission to mark holidays (for Operations department)
 }
 
 // Default page access by role
@@ -224,6 +235,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: false,
+    mark_holidays: false,
   },
   manager: {
     dashboard: true,
@@ -233,6 +245,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: true, // Managers can mark attendance by default
+    mark_holidays: true, // Managers can mark holidays by default
   },
   boardmember: {
     dashboard: true,
@@ -242,6 +255,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: false,
+    mark_holidays: false,
   },
   admin: {
     dashboard: true,
@@ -251,6 +265,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: true,
     super_admin_dashboard: false,
     mark_attendance: false,  // Not by default, can be granted by super admin
+    mark_holidays: true, // Admins can mark holidays by default
   },
   superadmin: {
     dashboard: true,
@@ -260,6 +275,7 @@ export const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: true,
     super_admin_dashboard: true,
     mark_attendance: false,  // Not by default, can be configured
+    mark_holidays: true, // Super admins can mark holidays by default
   },
 };
 

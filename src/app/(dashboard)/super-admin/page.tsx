@@ -1481,6 +1481,15 @@ export default function SuperAdminPage() {
                           />
                           <span className="text-sm">Mark Attendance</span>
                         </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={userPageAccess.mark_holidays}
+                            onChange={(e) => setUserPageAccess({ ...userPageAccess, mark_holidays: e.target.checked })}
+                            className="rounded"
+                          />
+                          <span className="text-sm">Mark Holidays</span>
+                        </label>
                       </div>
                     </div>
                   </div>
@@ -2054,6 +2063,15 @@ export default function SuperAdminPage() {
                               className="rounded"
                             />
                             <span className="text-sm">Mark Attendance</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editPageAccess.mark_holidays}
+                              onChange={(e) => setEditPageAccess({ ...editPageAccess, mark_holidays: e.target.checked })}
+                              className="rounded"
+                            />
+                            <span className="text-sm">Mark Holidays</span>
                           </label>
                         </div>
                       </div>

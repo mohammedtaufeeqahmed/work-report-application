@@ -201,6 +201,16 @@ export async function initializeDatabase(): Promise<void> {
       value TEXT NOT NULL,
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
+
+    -- Create holidays table
+    CREATE TABLE IF NOT EXISTS holidays (
+      id SERIAL PRIMARY KEY,
+      date TEXT UNIQUE NOT NULL,
+      name TEXT,
+      created_by INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
   `);
 
   // Create indexes
@@ -246,6 +256,10 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_otp_tokens_employee_id ON otp_tokens(employee_id);
     CREATE INDEX IF NOT EXISTS idx_otp_tokens_otp ON otp_tokens(otp);
     CREATE INDEX IF NOT EXISTS idx_otp_tokens_expires_at ON otp_tokens(expires_at);
+
+    -- Holidays indexes
+    CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);
+    CREATE INDEX IF NOT EXISTS idx_holidays_created_by ON holidays(created_by);
   `);
 
   // Insert default settings
@@ -308,6 +322,7 @@ export async function resetDatabase(): Promise<void> {
   
   // Drop all tables in reverse order of dependencies
   await pool.query(`
+    DROP TABLE IF EXISTS holidays CASCADE;
     DROP TABLE IF EXISTS otp_tokens CASCADE;
     DROP TABLE IF EXISTS password_reset_tokens CASCADE;
     DROP TABLE IF EXISTS work_reports CASCADE;

@@ -1,4 +1,4 @@
-import { eq, and, desc, like, inArray, sql, or } from 'drizzle-orm';
+import { eq, and, desc, like, inArray, sql, or, gte, lte } from 'drizzle-orm';
 import { logger } from '../logger';
 import { db, pool } from './database';
 import {
@@ -11,6 +11,7 @@ import {
   passwordResetTokens,
   otpTokens,
   settings,
+  holidays,
 } from './schema';
 import type {
   Employee as EmployeeType,
@@ -1278,4 +1279,128 @@ export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
   } finally {
     client.release();
   }
+}
+
+// ============================================================================
+// Holiday Queries
+// ============================================================================
+
+import type { Holiday } from '@/types';
+
+/**
+ * Create a new holiday
+ */
+export async function createHoliday(date: string, name: string | null, createdBy: number): Promise<Holiday> {
+  const result = await db
+    .insert(holidays)
+    .values({
+      date,
+      name: name || null,
+      createdBy,
+    })
+    .returning();
+  
+  return {
+    ...result[0],
+    createdAt: result[0].createdAt.toISOString(),
+    updatedAt: result[0].updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Get holidays by year, date range, or default (current + next year)
+ */
+export async function getHolidays(year?: number, startDate?: string, endDate?: string): Promise<Holiday[]> {
+  const baseQuery = db.select().from(holidays);
+  
+  let dateFilter: ReturnType<typeof and> | undefined;
+  
+  if (year) {
+    const yearStart = `${year}-01-01`;
+    const yearEnd = `${year}-12-31`;
+    dateFilter = and(gte(holidays.date, yearStart), lte(holidays.date, yearEnd));
+  } else if (startDate && endDate) {
+    dateFilter = and(gte(holidays.date, startDate), lte(holidays.date, endDate));
+  } else {
+    // Default: current year and next year
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    const yearStart = `${currentYear}-01-01`;
+    const yearEnd = `${nextYear}-12-31`;
+    dateFilter = and(gte(holidays.date, yearStart), lte(holidays.date, yearEnd));
+  }
+  
+  const result = dateFilter 
+    ? await baseQuery.where(dateFilter).orderBy(holidays.date)
+    : await baseQuery.orderBy(holidays.date);
+    
+  return result.map(h => ({
+    ...h,
+    createdAt: h.createdAt.toISOString(),
+    updatedAt: h.updatedAt.toISOString(),
+  }));
+}
+
+/**
+ * Get holiday by ID
+ */
+export async function getHolidayById(id: number): Promise<Holiday | null> {
+  const result = await db
+    .select()
+    .from(holidays)
+    .where(eq(holidays.id, id))
+    .limit(1);
+  
+  if (!result[0]) return null;
+  
+  return {
+    ...result[0],
+    createdAt: result[0].createdAt.toISOString(),
+    updatedAt: result[0].updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Delete a holiday
+ */
+export async function deleteHoliday(id: number): Promise<boolean> {
+  const result = await db
+    .delete(holidays)
+    .where(eq(holidays.id, id))
+    .returning();
+  
+  return result.length > 0;
+}
+
+/**
+ * Update a holiday
+ */
+export async function updateHoliday(id: number, name: string | null): Promise<Holiday> {
+  const result = await db
+    .update(holidays)
+    .set({
+      name: name || null,
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(holidays.id, id))
+    .returning();
+  
+  return {
+    ...result[0],
+    createdAt: result[0].createdAt.toISOString(),
+    updatedAt: result[0].updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Check if a holiday exists for a given date
+ */
+export async function checkHolidayExists(date: string): Promise<boolean> {
+  const result = await db
+    .select()
+    .from(holidays)
+    .where(eq(holidays.date, date))
+    .limit(1);
+  
+  return result.length > 0;
 }

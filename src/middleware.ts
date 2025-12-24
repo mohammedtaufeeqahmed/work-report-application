@@ -11,6 +11,7 @@ const protectedRoutes = [
   '/managers-dashboard',
   '/employee-reports',
   '/employee-dashboard',
+  '/holidays',
   // '/work-report' - removed from protected routes to allow unauthenticated access
   '/profile',
 ];
@@ -25,6 +26,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: false,
+    mark_holidays: false,
   },
   manager: {
     dashboard: true,
@@ -34,6 +36,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: true,
+    mark_holidays: true,
   },
   boardmember: {
     dashboard: true,
@@ -43,6 +46,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: false,
     super_admin_dashboard: false,
     mark_attendance: false,
+    mark_holidays: false,
   },
   admin: {
     dashboard: true,
@@ -52,6 +56,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: true,
     super_admin_dashboard: false,
     mark_attendance: false,
+    mark_holidays: true,
   },
   superadmin: {
     dashboard: true,
@@ -61,6 +66,7 @@ const DEFAULT_PAGE_ACCESS: Record<UserRole, PageAccess> = {
     admin_dashboard: true,
     super_admin_dashboard: true,
     mark_attendance: false,
+    mark_holidays: true,
   },
 };
 
@@ -73,6 +79,7 @@ const ROUTE_TO_PAGE_ACCESS: Record<string, keyof PageAccess> = {
   '/managers-dashboard': 'management_dashboard', // Uses same permission as management dashboard
   '/admin': 'admin_dashboard',
   '/super-admin': 'super_admin_dashboard',
+  '/holidays': 'mark_holidays',
 };
 
 // Get JWT secret
@@ -98,7 +105,20 @@ function getUserPageAccess(payload: { pageAccess?: PageAccess | null; role: User
 }
 
 // Check if user has access to a specific route
-function hasRouteAccess(pathname: string, pageAccess: PageAccess): boolean {
+function hasRouteAccess(pathname: string, pageAccess: PageAccess, role?: UserRole, department?: string): boolean {
+  // Special handling for holidays route
+  if (pathname.startsWith('/holidays')) {
+    // Managers, Admins, and Super Admins always have access
+    if (role === 'manager' || role === 'admin' || role === 'superadmin') {
+      return true;
+    }
+    // Operations department employees need explicit permission
+    if (department === 'Operations' && pageAccess.mark_holidays === true) {
+      return true;
+    }
+    return false;
+  }
+
   // Find matching route
   for (const [route, accessKey] of Object.entries(ROUTE_TO_PAGE_ACCESS)) {
     if (pathname.startsWith(route)) {
@@ -146,13 +166,14 @@ export async function middleware(request: NextRequest) {
     }
 
     const role = payload.role as UserRole;
+    const department = payload.department as string | undefined;
     const pageAccess = getUserPageAccess({ 
       pageAccess: payload.pageAccess as PageAccess | null | undefined, 
       role 
     });
 
     // Check page access permissions
-    if (!hasRouteAccess(pathname, pageAccess)) {
+    if (!hasRouteAccess(pathname, pageAccess, role, department)) {
       // Redirect to home page if user doesn't have access
       return NextResponse.redirect(new URL('/', request.url));
     }

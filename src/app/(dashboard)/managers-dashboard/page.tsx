@@ -31,19 +31,21 @@ export default function ManagersDashboardPage() {
   // Use IST for date range (default to last 7 days for managers)
   const [dateRange, setDateRange] = useState(getISTDateRangeFromDays(7));
 
-  // Color allocation system - Pastel colors
+  // Glassmorphic design - Black and white theme
   const getDepartmentColor = (departmentName: string, index: number) => {
-    const colors = [
-      { solid: 'bg-pink-50 dark:bg-pink-950/30', gradient: 'from-pink-50 to-pink-100 dark:from-pink-950/30 dark:to-pink-900/30', border: 'border-pink-200 dark:border-pink-800', text: 'text-pink-900 dark:text-pink-200' },
-      { solid: 'bg-purple-50 dark:bg-purple-950/30', gradient: 'from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30', border: 'border-purple-200 dark:border-purple-800', text: 'text-purple-900 dark:text-purple-200' },
-      { solid: 'bg-blue-50 dark:bg-blue-950/30', gradient: 'from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-900 dark:text-blue-200' },
-      { solid: 'bg-green-50 dark:bg-green-950/30', gradient: 'from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-900/30', border: 'border-green-200 dark:border-green-800', text: 'text-green-900 dark:text-green-200' },
-      { solid: 'bg-yellow-50 dark:bg-yellow-950/30', gradient: 'from-yellow-50 to-yellow-100 dark:from-yellow-950/30 dark:to-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-800', text: 'text-yellow-900 dark:text-yellow-200' },
-      { solid: 'bg-orange-50 dark:bg-orange-950/30', gradient: 'from-orange-50 to-orange-100 dark:from-orange-950/30 dark:to-orange-900/30', border: 'border-orange-200 dark:border-orange-800', text: 'text-orange-900 dark:text-orange-200' },
-      { solid: 'bg-cyan-50 dark:bg-cyan-950/30', gradient: 'from-cyan-50 to-cyan-100 dark:from-cyan-950/30 dark:to-cyan-900/30', border: 'border-cyan-200 dark:border-cyan-800', text: 'text-cyan-900 dark:text-cyan-200' },
-      { solid: 'bg-indigo-50 dark:bg-indigo-950/30', gradient: 'from-indigo-50 to-indigo-100 dark:from-indigo-950/30 dark:to-indigo-900/30', border: 'border-indigo-200 dark:border-indigo-800', text: 'text-indigo-900 dark:text-indigo-200' },
+    // All departments use the same glassmorphic black/white design
+    // Visual distinction comes from subtle variations in opacity and borders
+    const variations = [
+      { solid: 'bg-card/80 backdrop-blur-sm', gradient: 'from-card/80 to-card/50', border: 'border-border/50', text: 'text-foreground', accent: 'bg-foreground/5' },
+      { solid: 'bg-card/70 backdrop-blur-sm', gradient: 'from-card/70 to-card/40', border: 'border-border/60', text: 'text-foreground', accent: 'bg-foreground/10' },
+      { solid: 'bg-card/90 backdrop-blur-sm', gradient: 'from-card/90 to-card/60', border: 'border-border/40', text: 'text-foreground', accent: 'bg-foreground/5' },
+      { solid: 'bg-card/75 backdrop-blur-sm', gradient: 'from-card/75 to-card/45', border: 'border-border/55', text: 'text-foreground', accent: 'bg-foreground/8' },
+      { solid: 'bg-card/85 backdrop-blur-sm', gradient: 'from-card/85 to-card/55', border: 'border-border/45', text: 'text-foreground', accent: 'bg-foreground/6' },
+      { solid: 'bg-card/80 backdrop-blur-sm', gradient: 'from-card/80 to-card/50', border: 'border-border/50', text: 'text-foreground', accent: 'bg-foreground/5' },
+      { solid: 'bg-card/70 backdrop-blur-sm', gradient: 'from-card/70 to-card/40', border: 'border-border/60', text: 'text-foreground', accent: 'bg-foreground/10' },
+      { solid: 'bg-card/90 backdrop-blur-sm', gradient: 'from-card/90 to-card/60', border: 'border-border/40', text: 'text-foreground', accent: 'bg-foreground/5' },
     ];
-    return colors[index % colors.length];
+    return variations[index % variations.length];
   };
 
   // Initialize department colors
@@ -170,10 +172,18 @@ export default function ManagersDashboardPage() {
   };
 
   const isLateSubmission = (report: WorkReport) => {
-    const submissionDate = convertUTCToISTDate(report.createdAt);
-    // A report is late only if submitted on a day AFTER the report date
-    // Same day submissions (even at 11:59 PM) should NOT be marked as late
-    return report.date !== submissionDate && report.date < submissionDate;
+    try {
+      const submissionDate = convertUTCToISTDate(report.createdAt);
+      // A report is late only if submitted on a day AFTER the report date
+      // Same day submissions (even at 11:59 PM IST) should NOT be marked as late
+      // Compare dates as strings (YYYY-MM-DD format)
+      const isLate = report.date < submissionDate;
+      return isLate;
+    } catch (error) {
+      // If date conversion fails, don't mark as late (fail-safe)
+      console.error('Error checking late submission:', error);
+      return false;
+    }
   };
 
   const toggleExpand = (reportId: number) => {

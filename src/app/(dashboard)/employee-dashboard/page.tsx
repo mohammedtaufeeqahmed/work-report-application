@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions } from '@/types';
 import { getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, getDayOfMonthIST, convertUTCToISTDate } from '@/lib/date';
+import { logger } from '@/lib/logger';
 import { WorkReportCalendar } from '@/components/work-report-calendar';
 
 export default function EmployeeDashboardPage() {
@@ -208,10 +209,18 @@ export default function EmployeeDashboardPage() {
   
   // Helper function to check if report is a late submission
   const isLateSubmission = useCallback((report: WorkReport) => {
-    const submissionDate = convertUTCToISTDate(report.createdAt);
-    // A report is late only if submitted on a day AFTER the report date
-    // Same day submissions (even at 11:59 PM) should NOT be marked as late
-    return report.date !== submissionDate && report.date < submissionDate;
+    try {
+      const submissionDate = convertUTCToISTDate(report.createdAt);
+      // A report is late only if submitted on a day AFTER the report date
+      // Same day submissions (even at 11:59 PM IST) should NOT be marked as late
+      // Compare dates as strings (YYYY-MM-DD format)
+      const isLate = report.date < submissionDate;
+      return isLate;
+    } catch (error) {
+      // If date conversion fails, don't mark as late (fail-safe)
+      logger.error('Error checking late submission:', error);
+      return false;
+    }
   }, []);
 
   // Loading state
@@ -270,11 +279,11 @@ export default function EmployeeDashboardPage() {
           {/* Main Content Grid with Calendar */}
           <div className="grid gap-6 lg:grid-cols-[1fr_400px] mb-6">
             <div className="space-y-6">
-          {/* Profile & Action Card */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* Profile Card */}
-            <div className="lg:col-span-2 p-6 rounded-2xl bg-card border shadow-sm">
-              <div className="flex items-start gap-4">
+          {/* Combined Profile & Action Card */}
+          <div className="p-6 rounded-2xl bg-card border shadow-sm">
+            <div className="flex flex-col lg:flex-row items-start gap-6">
+              {/* Left Section - Profile Info */}
+              <div className="flex items-start gap-4 flex-1 min-w-0">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center text-2xl font-bold shadow-lg shadow-primary/20">
@@ -282,9 +291,7 @@ export default function EmployeeDashboardPage() {
                   </div>
                   <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-card flex items-center justify-center ${
                     todayReport 
-                      ? todayReport.status === 'working' 
-                        ? 'bg-emerald-500' 
-                        : 'bg-amber-500'
+                      ? 'bg-foreground' 
                       : 'bg-muted-foreground'
                   }`}>
                     {todayReport ? (
@@ -316,11 +323,7 @@ export default function EmployeeDashboardPage() {
                       {session.department}
                     </span>
                     {todayReport ? (
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${
-                        todayReport.status === 'working'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      }`}>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-muted/50 text-foreground">
                         <CheckCircle2 className="h-3 w-3" />
                         Today&apos;s Report Submitted
                       </span>
@@ -333,20 +336,10 @@ export default function EmployeeDashboardPage() {
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Quick Action Card */}
-            <div className={`p-6 rounded-2xl border shadow-sm ${
-              todayReport 
-                ? 'bg-gradient-to-br from-emerald-500/5 to-green-500/5 border-emerald-500/20' 
-                : 'bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20'
-            }`}>
-              <div className="flex flex-col h-full">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${
-                  todayReport 
-                    ? 'bg-emerald-500/10' 
-                    : 'bg-primary/10'
-                }`}>
+              {/* Right Section - Today's Report Action */}
+              <div className="flex flex-col lg:items-end lg:text-right w-full lg:w-auto lg:min-w-[200px]">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 bg-muted/50 lg:ml-auto">
                   {todayReport ? (
                     <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                   ) : (
@@ -357,20 +350,16 @@ export default function EmployeeDashboardPage() {
                 <h3 className="font-semibold mb-1">
                   {todayReport ? 'Report Submitted' : 'Today\'s Report'}
                 </h3>
-                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                <p className="text-sm text-muted-foreground mb-4">
                   {todayReport 
                     ? `You marked ${todayReport.status === 'working' ? 'working' : 'leave'} for today.`
                     : 'Don\'t forget to submit your daily work report.'}
                 </p>
                 
-                <Link href="/work-report" className="block">
+                <Link href="/work-report" className="block w-full lg:w-auto">
                   <Button 
                     size="sm" 
-                    className={`w-full ${
-                      todayReport 
-                        ? 'bg-emerald-600 hover:bg-emerald-700' 
-                        : 'bg-gradient-to-r from-primary to-primary/80'
-                    }`}
+                    className="w-full lg:w-auto bg-foreground text-background hover:bg-foreground/90"
                   >
                     {todayReport ? (
                       <>View Report</>
@@ -395,43 +384,39 @@ export default function EmployeeDashboardPage() {
             </div>
 
             {/* Working Days */}
-            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 shadow-sm">
+            <div className="p-4 rounded-2xl bg-card border shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-muted-foreground">Working Days</span>
-                <Briefcase className="h-4 w-4 text-emerald-500" />
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-3xl font-bold text-emerald-600">{stats.workingCount}</p>
+              <p className="text-3xl font-bold">{stats.workingCount}</p>
             </div>
 
             {/* On Duty */}
-            <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 shadow-sm">
+            <div className="p-4 rounded-2xl bg-card border shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-muted-foreground">On Duty</span>
-                <Shield className="h-4 w-4 text-blue-500" />
+                <Shield className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-3xl font-bold text-blue-600">{stats.onDutyCount}</p>
+              <p className="text-3xl font-bold">{stats.onDutyCount}</p>
             </div>
 
             {/* Leave Days */}
-            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 shadow-sm">
+            <div className="p-4 rounded-2xl bg-card border shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-muted-foreground">Leave Days</span>
-                <Coffee className="h-4 w-4 text-amber-500" />
+                <Coffee className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-3xl font-bold text-amber-600">{stats.leaveCount}</p>
+              <p className="text-3xl font-bold">{stats.leaveCount}</p>
             </div>
 
             {/* Attendance Rate */}
-            <div className={`p-4 rounded-2xl border shadow-sm ${
-              stats.attendanceRate >= 80 
-                ? 'bg-emerald-500/5 border-emerald-500/20' 
-                : 'bg-amber-500/5 border-amber-500/20'
-            }`}>
+            <div className="p-4 rounded-2xl border shadow-sm bg-card">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-muted-foreground">Attendance</span>
-                <TrendingUp className={`h-4 w-4 ${stats.attendanceRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`} />
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className={`text-3xl font-bold ${stats.attendanceRate >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <p className="text-3xl font-bold">
                 {stats.attendanceRate}%
               </p>
             </div>
@@ -439,10 +424,10 @@ export default function EmployeeDashboardPage() {
 
           {/* Edit Permission Banner */}
           {canEditOwnReports && (
-            <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-500/20">
+            <div className="mb-4 p-4 rounded-xl bg-muted/50 border border-border">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                  <Pencil className="h-4 w-4 text-emerald-600" />
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                  <Pencil className="h-4 w-4 text-foreground" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Editing Enabled</p>
@@ -512,20 +497,12 @@ export default function EmployeeDashboardPage() {
                             : 'hover:bg-muted/30 cursor-pointer'
                         }`}
                       >
-                        {/* Gradient accent bar */}
-                        <div className={`absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r ${
-                          report.status === 'working' 
-                            ? 'from-emerald-400 to-green-500' 
-                            : 'from-amber-400 to-orange-500'
-                        }`} />
+                        {/* Accent bar - black and white theme */}
+                        <div className="absolute top-0 left-0 w-full h-0.5 bg-foreground/10" />
                         
                         <div className="flex items-center gap-3 px-4 py-3">
-                          {/* Date Block */}
-                          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
-                            report.status === 'working'
-                              ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
-                              : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
-                          }`}>
+                          {/* Date Block - black and white theme */}
+                          <div className="w-14 h-14 rounded-xl flex flex-col items-center justify-center flex-shrink-0 bg-foreground text-background">
                             <span className="text-xs font-medium uppercase opacity-90">{getShortDay(report.date)}</span>
                             <span className="text-xl font-bold leading-none">{getDayOfMonthIST(report.date)}</span>
                           </div>
@@ -613,7 +590,7 @@ export default function EmployeeDashboardPage() {
                                           size="sm" 
                                           onClick={handleSaveEdit} 
                                           disabled={saving}
-                                          className="h-8 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                                          className="h-8 px-4 bg-foreground text-background hover:bg-foreground/90"
                                         >
                                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Check className="h-3.5 w-3.5 mr-1" /> Save</>}
                                         </Button>
@@ -628,8 +605,8 @@ export default function EmployeeDashboardPage() {
                                           onClick={() => setEditStatus('working')}
                                           className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                                             editStatus === 'working'
-                                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
-                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                              ? 'bg-foreground text-background ring-2 ring-foreground/30'
+                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                                           }`}
                                         >
                                           <Briefcase className="h-4 w-4" /> Working
@@ -639,8 +616,8 @@ export default function EmployeeDashboardPage() {
                                           onClick={() => setEditStatus('leave')}
                                           className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                                             editStatus === 'leave'
-                                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/30'
-                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                              ? 'bg-foreground text-background ring-2 ring-foreground/30'
+                                              : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                                           }`}
                                         >
                                           <Coffee className="h-4 w-4" /> Leave

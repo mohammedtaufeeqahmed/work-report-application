@@ -289,10 +289,18 @@ export default function EmployeeReportsPage() {
   }, [allReports, reports]);
   
   const isLateSubmission = useCallback((report: WorkReport) => {
+    try {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    // A report is late only if submitted on a day AFTER the report date
-    // Same day submissions (even at 11:59 PM) should NOT be marked as late
-    return report.date !== submissionDate && report.date < submissionDate;
+      // A report is late only if submitted on a day AFTER the report date
+      // Same day submissions (even at 11:59 PM IST) should NOT be marked as late
+      // Compare dates as strings (YYYY-MM-DD format)
+      const isLate = report.date < submissionDate;
+      return isLate;
+    } catch (error) {
+      // If date conversion fails, don't mark as late (fail-safe)
+      console.error('Error checking late submission:', error);
+      return false;
+    }
   }, []);
 
   const groupReportsByDate = useCallback((reports: WorkReport[]) => {
@@ -326,19 +334,21 @@ export default function EmployeeReportsPage() {
     return dates;
   }, []);
 
-  // Premium color palette for departments
+  // Glassmorphic design - Black and white theme for departments
   const departmentColors = useMemo(() => {
-    const colors = [
-      { bg: 'from-violet-500/10 to-purple-500/10', border: 'border-violet-500/20', accent: 'bg-violet-500', text: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-500/10 text-violet-600 dark:text-violet-400' },
-      { bg: 'from-blue-500/10 to-cyan-500/10', border: 'border-blue-500/20', accent: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-      { bg: 'from-emerald-500/10 to-teal-500/10', border: 'border-emerald-500/20', accent: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-      { bg: 'from-amber-500/10 to-orange-500/10', border: 'border-amber-500/20', accent: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-      { bg: 'from-rose-500/10 to-pink-500/10', border: 'border-rose-500/20', accent: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
-      { bg: 'from-indigo-500/10 to-blue-500/10', border: 'border-indigo-500/20', accent: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' },
+    // All departments use the same glassmorphic black/white design
+    // Visual distinction comes from subtle variations in opacity and borders
+    const variations = [
+      { bg: 'from-card/80 to-card/50 backdrop-blur-sm', border: 'border-border/50', accent: 'bg-foreground/10', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
+      { bg: 'from-card/70 to-card/40 backdrop-blur-sm', border: 'border-border/60', accent: 'bg-foreground/15', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
+      { bg: 'from-card/90 to-card/60 backdrop-blur-sm', border: 'border-border/40', accent: 'bg-foreground/8', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
+      { bg: 'from-card/75 to-card/45 backdrop-blur-sm', border: 'border-border/55', accent: 'bg-foreground/12', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
+      { bg: 'from-card/85 to-card/55 backdrop-blur-sm', border: 'border-border/45', accent: 'bg-foreground/9', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
+      { bg: 'from-card/80 to-card/50 backdrop-blur-sm', border: 'border-border/50', accent: 'bg-foreground/10', text: 'text-foreground', badge: 'bg-foreground/10 text-foreground' },
     ];
-    const colorMap = new Map<string, typeof colors[0]>();
+    const colorMap = new Map<string, typeof variations[0]>();
     managerDepartments.forEach((dept, index) => {
-      colorMap.set(dept.name, colors[index % colors.length]);
+      colorMap.set(dept.name, variations[index % variations.length]);
     });
     return colorMap;
   }, [managerDepartments]);
@@ -359,21 +369,13 @@ export default function EmployeeReportsPage() {
             : 'bg-card/50 hover:bg-card hover:shadow-md cursor-pointer'
         }`}
       >
-        {/* Gradient accent bar */}
-        <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${
-          report.status === 'working' 
-            ? 'from-emerald-400 to-green-500' 
-            : 'from-amber-400 to-orange-500'
-        }`} />
+        {/* Accent bar - black and white theme */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-foreground/10" />
         
         <div className="flex items-start gap-3">
-          {/* Avatar with status ring */}
+          {/* Avatar with status ring - black and white theme */}
           <div className="relative flex-shrink-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
-              report.status === 'working'
-                ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
-                : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
-            }`}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold bg-foreground text-background">
               {report.name?.charAt(0).toUpperCase() || 'E'}
             </div>
             {report.onDuty && (
@@ -450,7 +452,7 @@ export default function EmployeeReportsPage() {
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
                           disabled={saving}
-                          className="h-7 px-3 text-xs bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                          className="h-7 px-3 text-xs bg-foreground text-background hover:bg-foreground/90"
                         >
                           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Save</>}
                         </Button>
@@ -465,8 +467,8 @@ export default function EmployeeReportsPage() {
                           onClick={(e) => { e.stopPropagation(); setEditStatus('working'); }}
                           className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                             editStatus === 'working'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30'
-                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                              ? 'bg-foreground text-background ring-1 ring-foreground/30'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                           }`}
                         >
                           <Briefcase className="w-3.5 h-3.5" /> Working
@@ -476,8 +478,8 @@ export default function EmployeeReportsPage() {
                           onClick={(e) => { e.stopPropagation(); setEditStatus('leave'); }}
                           className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                             editStatus === 'leave'
-                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30'
-                              : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                              ? 'bg-foreground text-background ring-1 ring-foreground/30'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                           }`}
                         >
                           <Coffee className="w-3.5 h-3.5" /> Leave
@@ -964,19 +966,11 @@ export default function EmployeeReportsPage() {
                                   : 'hover:bg-muted/30'
                               }`}
                             >
-                              {/* Status Bar */}
-                              <div className={`w-1 h-12 rounded-full flex-shrink-0 ${
-                                report.status === 'working' 
-                                  ? 'bg-gradient-to-b from-emerald-400 to-green-600' 
-                                  : 'bg-gradient-to-b from-amber-400 to-orange-600'
-                            }`} />
+                              {/* Status Bar - black and white theme */}
+                              <div className="w-1 h-12 rounded-full flex-shrink-0 bg-foreground/20" />
                             
-                              {/* Avatar */}
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                                report.status === 'working'
-                                  ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white'
-                                  : 'bg-gradient-to-br from-amber-500 to-orange-600 text-white'
-                              }`}>
+                              {/* Avatar - black and white theme */}
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 bg-foreground text-background">
                                 {report.name?.charAt(0).toUpperCase() || 'E'}
                               </div>
                               
@@ -1068,7 +1062,7 @@ export default function EmployeeReportsPage() {
                                         size="sm"
                                         onClick={handleSaveEdit}
                                         disabled={saving}
-                                            className="h-8 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+                                            className="h-8 px-4 bg-foreground text-background hover:bg-foreground/90"
                                           >
                                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Check className="h-3.5 w-3.5 mr-1" /> Save</>}
                                       </Button>
@@ -1083,8 +1077,8 @@ export default function EmployeeReportsPage() {
                                         onClick={() => setEditStatus('working')}
                                             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                                           editStatus === 'working'
-                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
-                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                                ? 'bg-foreground text-background ring-2 ring-foreground/30'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                                         }`}
                                       >
                                             <Briefcase className="h-4 w-4" /> Working
@@ -1094,8 +1088,8 @@ export default function EmployeeReportsPage() {
                                         onClick={() => setEditStatus('leave')}
                                             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                                           editStatus === 'leave'
-                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/30'
-                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                                                ? 'bg-foreground text-background ring-2 ring-foreground/30'
+                                                : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-border'
                                         }`}
                                       >
                                             <Coffee className="h-4 w-4" /> Leave
@@ -1158,7 +1152,7 @@ export default function EmployeeReportsPage() {
               </div>
             </div>
           )}
-          </div>
+        </div>
 
           {/* Calendar Sidebar - Only for employees */}
           {session?.role === 'employee' && (

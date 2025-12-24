@@ -197,6 +197,28 @@ export const settings = pgTable('settings', {
 });
 
 // ============================================================================
+// Holidays Table
+// ============================================================================
+export const holidays = pgTable('holidays', {
+  id: serial('id').primaryKey(),
+  date: text('date').unique().notNull(), // YYYY-MM-DD format
+  name: text('name'), // Optional holiday name/description
+  createdBy: integer('created_by').references(() => employees.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_holidays_date').on(table.date),
+  index('idx_holidays_created_by').on(table.createdBy),
+]);
+
+export const holidaysRelations = relations(holidays, ({ one }) => ({
+  creator: one(employees, {
+    fields: [holidays.createdBy],
+    references: [employees.id],
+  }),
+}));
+
+// ============================================================================
 // Type Exports for use in queries
 // ============================================================================
 export type Entity = typeof entities.$inferSelect;
@@ -225,3 +247,6 @@ export type NewOtpToken = typeof otpTokens.$inferInsert;
 
 export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
+
+export type Holiday = typeof holidays.$inferSelect;
+export type NewHoliday = typeof holidays.$inferInsert;

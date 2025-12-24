@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { hashPassword } from '@/lib/auth';
 import { sendPasswordResetEmail } from '@/lib/email';
+import { logger } from '@/lib/logger';
 import { 
   getEmployeeByEmployeeId, 
   getEmployeeByEmail,
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (!emailSent) {
       console.error(`[Password Reset] Failed to send email to ${employee.email}`);
     } else {
-      console.log(`[Password Reset] Email sent to ${employee.email}`);
+      logger.info(`[Password Reset] Email sent to ${employee.email}`);
     }
 
     // Mask email for response (show first 2 chars and domain)
