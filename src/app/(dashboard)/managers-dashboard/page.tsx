@@ -171,7 +171,9 @@ export default function ManagersDashboardPage() {
 
   const isLateSubmission = (report: WorkReport) => {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    return report.date < submissionDate;
+    // A report is late only if submitted on a day AFTER the report date
+    // Same day submissions (even at 11:59 PM) should NOT be marked as late
+    return report.date !== submissionDate && report.date < submissionDate;
   };
 
   const toggleExpand = (reportId: number) => {
@@ -690,7 +692,74 @@ export default function ManagersDashboardPage() {
                 Please contact an administrator to assign departments to your account.
               </p>
             </div>
+          ) : managerDepartments.length === 1 ? (
+            // Single Department: Full-width optimized layout
+            <div className="w-full max-w-6xl mx-auto">
+              {managerDepartments.map(dept => {
+                const colorScheme = departmentColors.get(dept.name);
+                const deptReports = reportsByDepartment[dept.name] || [];
+                
+                return (
+                  <div
+                    key={dept.id}
+                    className={`w-full rounded-xl border-2 shadow-lg ${colorScheme?.border || 'border-border'} ${colorScheme?.solid || 'bg-card'}`}
+                  >
+                    {/* Column Header - Enhanced for single department */}
+                    <div className={`p-6 rounded-t-xl border-b-2 ${colorScheme?.border || 'border-border'} ${
+                      colorScheme?.gradient 
+                        ? `bg-gradient-to-br ${colorScheme.gradient}` 
+                        : colorScheme?.solid || 'bg-muted'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            colorScheme?.text || 'text-foreground'
+                          } bg-background/30`}>
+                            <Building2 className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <h3 className={`text-xl font-bold ${colorScheme?.text || 'text-foreground'}`}>
+                              {dept.name}
+                            </h3>
+                            <p className={`text-xs ${colorScheme?.text || 'text-muted-foreground'} opacity-80`}>
+                              {deptReports.length} {deptReports.length === 1 ? 'report' : 'reports'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-sm px-3 py-1.5 rounded-full font-semibold ${
+                          colorScheme?.text || 'text-muted-foreground'
+                        } bg-background/60 backdrop-blur-sm`}>
+                          {deptReports.length}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Column Content - Grid layout for better space utilization */}
+                    <div className="p-6">
+                      {deptReports.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                            <Building2 className="h-8 w-8 text-muted-foreground/50" />
+                          </div>
+                          <p className="text-sm font-medium text-muted-foreground">No reports found</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Work reports will appear here once submitted
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {deptReports.map(report => (
+                            <WorkReportCard key={report.id} report={report} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            // Multiple Departments: Scrum board horizontal layout
             <div className="overflow-x-auto pb-4">
               <div className="flex gap-4 min-w-max">
                 {managerDepartments.map(dept => {

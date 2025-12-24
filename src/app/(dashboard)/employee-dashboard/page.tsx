@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions } from '@/types';
 import { getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, getDayOfMonthIST, convertUTCToISTDate } from '@/lib/date';
+import { WorkReportCalendar } from '@/components/work-report-calendar';
 
 export default function EmployeeDashboardPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
@@ -38,6 +39,7 @@ export default function EmployeeDashboardPage() {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [editPermissions, setEditPermissions] = useState<EditPermissions | null>(null);
+  const [holidays, setHolidays] = useState<string[]>([]);
 
   // Edit state
   const [editingReport, setEditingReport] = useState<WorkReport | null>(null);
@@ -116,6 +118,22 @@ export default function EmployeeDashboardPage() {
     }
   }, [session?.employeeId, fetchReports]);
 
+  // Fetch holidays
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      try {
+        const response = await fetch('/api/holidays');
+        const data = await response.json();
+        if (data.success) {
+          setHolidays(data.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch holidays:', error);
+      }
+    };
+    fetchHolidays();
+  }, []);
+
   const handleEditClick = useCallback((report: WorkReport) => {
     setEditingReport(report);
     setEditStatus(report.status);
@@ -191,7 +209,9 @@ export default function EmployeeDashboardPage() {
   // Helper function to check if report is a late submission
   const isLateSubmission = useCallback((report: WorkReport) => {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    return report.date < submissionDate;
+    // A report is late only if submitted on a day AFTER the report date
+    // Same day submissions (even at 11:59 PM) should NOT be marked as late
+    return report.date !== submissionDate && report.date < submissionDate;
   }, []);
 
   // Loading state
@@ -229,8 +249,8 @@ export default function EmployeeDashboardPage() {
 
   return (
     <div className="min-h-screen pt-16 pb-12 bg-gradient-to-b from-background via-background to-muted/20">
-      <div className="container px-4 md:px-6 py-8">
-        <div className="max-w-5xl mx-auto">
+      <div className="container px-4 md:px-6 py-8 max-w-full">
+        <div className="w-full">
           
           {/* Header Section */}
           <div className="mb-8">
@@ -247,8 +267,11 @@ export default function EmployeeDashboardPage() {
             </div>
           </div>
 
+          {/* Main Content Grid with Calendar */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_400px] mb-6">
+            <div className="space-y-6">
           {/* Profile & Action Card */}
-          <div className="grid gap-4 lg:grid-cols-3 mb-6">
+          <div className="grid gap-4 lg:grid-cols-3">
             {/* Profile Card */}
             <div className="lg:col-span-2 p-6 rounded-2xl bg-card border shadow-sm">
               <div className="flex items-start gap-4">
@@ -476,6 +499,7 @@ export default function EmployeeDashboardPage() {
                   {reports.map((report, index) => (
                     <div 
                       key={report.id}
+                      id={`report-${report.id}`}
                       className="animate-fade-in"
                       style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
                     >
@@ -656,6 +680,23 @@ export default function EmployeeDashboardPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+            </div>
+
+            {/* Calendar Sidebar */}
+            <div className="lg:sticky lg:top-20 h-fit">
+              <WorkReportCalendar 
+                reports={reports} 
+                holidays={holidays}
+                onDateClick={(date) => {
+                  const report = reports.find(r => r.date === date);
+                  if (report) {
+                    setExpandedReportId(report.id);
+                    document.getElementById(`report-${report.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }}
+              />
             </div>
           </div>
 

@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import type { WorkReport, SessionUser, WorkStatus, EditPermissions, Department } from '@/types';
 import { getISTTodayRange, getISTTodayDateString, getShortDayIST, getShortDateIST, formatDateForDisplay, convertUTCToISTDate } from '@/lib/date';
+import { WorkReportCalendar } from '@/components/work-report-calendar';
 
 export default function EmployeeReportsPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
@@ -40,6 +41,7 @@ export default function EmployeeReportsPage() {
   // Scrum board state
   const [managerDepartments, setManagerDepartments] = useState<Department[]>([]);
   const [viewMode, setViewMode] = useState<'scrum' | 'list'>('scrum');
+  const [holidays, setHolidays] = useState<string[]>([]);
 
   const canSearchOthers = session?.role === 'admin' || session?.role === 'superadmin' || session?.role === 'manager';
   const isManager = session?.role === 'manager';
@@ -165,6 +167,22 @@ export default function EmployeeReportsPage() {
     fetchSessionAndPermissions();
   }, []);
 
+  // Fetch holidays
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      try {
+        const response = await fetch('/api/holidays');
+        const data = await response.json();
+        if (data.success) {
+          setHolidays(data.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch holidays:', error);
+      }
+    };
+    fetchHolidays();
+  }, []);
+
   const handleSearch = useCallback(() => {
     fetchReports(searchQuery, selectedDepartment, dateRange.start, dateRange.end);
   }, [searchQuery, selectedDepartment, dateRange.start, dateRange.end, fetchReports]);
@@ -261,18 +279,20 @@ export default function EmployeeReportsPage() {
 
   // Stats calculations
   const stats = useMemo(() => {
-    const workingReports = allReports.filter(r => r.status === 'working');
-    const workingCount = [...new Set(workingReports.map(r => r.date))].length;
+  const workingReports = allReports.filter(r => r.status === 'working');
+  const workingCount = [...new Set(workingReports.map(r => r.date))].length;
     const leaveCount = allReports.filter(r => r.status === 'leave').length;
-    const onDutyCount = allReports.filter(r => r.onDuty).length;
-    const uniqueEmployees = [...new Set(allReports.map(r => r.employeeId))].length;
-    
+  const onDutyCount = allReports.filter(r => r.onDuty).length;
+  const uniqueEmployees = [...new Set(allReports.map(r => r.employeeId))].length;
+  
     return { workingCount, leaveCount, onDutyCount, uniqueEmployees, total: reports.length };
   }, [allReports, reports]);
   
   const isLateSubmission = useCallback((report: WorkReport) => {
     const submissionDate = convertUTCToISTDate(report.createdAt);
-    return report.date < submissionDate;
+    // A report is late only if submitted on a day AFTER the report date
+    // Same day submissions (even at 11:59 PM) should NOT be marked as late
+    return report.date !== submissionDate && report.date < submissionDate;
   }, []);
 
   const groupReportsByDate = useCallback((reports: WorkReport[]) => {
@@ -534,12 +554,12 @@ export default function EmployeeReportsPage() {
         <div className="max-w-md w-full text-center">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center mx-auto mb-6">
             <Lock className="h-10 w-10 text-muted-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Login Required</h1>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Login Required</h1>
           <p className="text-muted-foreground mb-6">Please login to view work reports.</p>
           <Button onClick={() => window.location.href = '/login'} className="btn-shine">
             Go to Login <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+            </Button>
         </div>
       </div>
     );
@@ -547,8 +567,9 @@ export default function EmployeeReportsPage() {
 
   return (
     <div className="min-h-screen pt-16 pb-12 bg-gradient-to-b from-background via-background to-muted/20">
-      <div className="container px-4 md:px-6 py-8">
-        <div className={`${isManager && viewMode === 'scrum' ? 'max-w-[1600px]' : 'max-w-5xl'} mx-auto`}>
+      <div className="container px-4 md:px-6 py-8 max-w-full">
+        <div className={`w-full ${session?.role === 'employee' ? 'grid gap-6 lg:grid-cols-[1fr_400px]' : ''}`}>
+          <div className={session?.role === 'employee' ? '' : `${isManager && viewMode === 'scrum' ? 'max-w-[1600px]' : 'max-w-5xl'} mx-auto`}>
           
           {/* Header Section */}
           <div className="mb-8">
@@ -558,13 +579,13 @@ export default function EmployeeReportsPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">
-                  {canSearchOthers
+              {canSearchOthers
                     ? session?.role === 'manager' ? 'Team Reports' : 'Employee Reports'
-                    : 'My Work Reports'}
-                </h1>
+                : 'My Work Reports'}
+            </h1>
                 <p className="text-sm text-muted-foreground">
-                  {canSearchOthers 
-                    ? session?.role === 'manager'
+              {canSearchOthers 
+                ? session?.role === 'manager'
                       ? 'Monitor and manage your team\'s daily work updates'
                       : 'View and manage employee work history' 
                     : 'Track your work report submissions'}
@@ -609,16 +630,16 @@ export default function EmployeeReportsPage() {
                   {/* Department */}
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <select
-                      value={selectedDepartment}
-                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => handleDepartmentChange(e.target.value)}
                       className="h-9 pl-9 pr-8 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer appearance-none"
-                    >
-                      <option value="all">All Departments</option>
-                      {departments.map((dept) => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
+                  >
+                    <option value="all">All Departments</option>
+                    {departments.map((dept) => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                   </div>
                   
@@ -634,12 +655,12 @@ export default function EmployeeReportsPage() {
                       />
                     </div>
                     <span className="text-xs text-muted-foreground">to</span>
-                    <Input
-                      type="date"
-                      value={dateRange.end}
-                      onChange={(e) => handleDateRangeChange(dateRange.start, e.target.value)}
+                      <Input
+                        type="date"
+                        value={dateRange.end}
+                        onChange={(e) => handleDateRangeChange(dateRange.start, e.target.value)}
                       className="h-8 w-36 text-sm bg-background border-0"
-                    />
+                      />
                   </div>
                   
                   {/* Clear Filters */}
@@ -649,7 +670,7 @@ export default function EmployeeReportsPage() {
                     </Button>
                   )}
                 </div>
-              </div>
+                  </div>
               {error && <p className="text-sm text-destructive mt-3 flex items-center gap-2"><AlertCircle className="h-4 w-4" />{error}</p>}
             </div>
           )}
@@ -684,7 +705,7 @@ export default function EmployeeReportsPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-muted-foreground">Total Reports</span>
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                      </div>
+                    </div>
                       <p className="text-3xl font-bold">{stats.total}</p>
                     </div>
                     
@@ -839,7 +860,7 @@ export default function EmployeeReportsPage() {
                                 <th className="sticky left-0 z-20 bg-muted/80 backdrop-blur-sm border-r border-b p-4 text-left text-sm font-semibold min-w-[120px]">
                                   <div className="flex items-center gap-2">
                                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                                    Date
+                                  Date
                                   </div>
                                 </th>
                                 {managerDepartments.map(dept => {
@@ -851,7 +872,7 @@ export default function EmployeeReportsPage() {
                                     >
                                       <div className="flex items-center justify-center gap-2">
                                         <div className={`w-2 h-2 rounded-full ${color?.accent || 'bg-muted-foreground'}`} />
-                                        {dept.name}
+                                      {dept.name}
                                       </div>
                                     </th>
                                   );
@@ -873,9 +894,9 @@ export default function EmployeeReportsPage() {
                                       }`}>
                                         <div className="flex items-center gap-2">
                                           {isToday && <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />}
-                                          <div>
+                                        <div>
                                             <p className={`font-semibold ${isToday ? 'text-primary' : ''}`}>{getShortDay(date)}</p>
-                                            <p className="text-xs text-muted-foreground">{getShortDate(date)}</p>
+                                          <p className="text-xs text-muted-foreground">{getShortDate(date)}</p>
                                           </div>
                                         </div>
                                       </td>
@@ -927,18 +948,18 @@ export default function EmployeeReportsPage() {
                             {statusFilter === 'working' ? 'Working only' : 'Leave only'}
                           </span>
                         )}
-                      </div>
+                    </div>
                       <div className="divide-y divide-border/50">
-                        {reports.map((report, index) => (
-                          <div 
-                            key={report.id} 
-                            className="animate-fade-in"
-                            style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
-                          >
-                            <div
-                              onClick={() => toggleExpand(report.id)}
+                      {reports.map((report, index) => (
+                        <div 
+                          key={report.id} 
+                          className="animate-fade-in"
+                          style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
+                        >
+                          <div
+                            onClick={() => toggleExpand(report.id)}
                               className={`flex items-center gap-4 px-4 py-3 cursor-pointer transition-all ${
-                                expandedReportId === report.id || editingReport?.id === report.id
+                              expandedReportId === report.id || editingReport?.id === report.id
                                   ? 'bg-muted/50'
                                   : 'hover:bg-muted/30'
                               }`}
@@ -948,8 +969,8 @@ export default function EmployeeReportsPage() {
                                 report.status === 'working' 
                                   ? 'bg-gradient-to-b from-emerald-400 to-green-600' 
                                   : 'bg-gradient-to-b from-amber-400 to-orange-600'
-                              }`} />
-                              
+                            }`} />
+                            
                               {/* Avatar */}
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 ${
                                 report.status === 'working'
@@ -962,156 +983,156 @@ export default function EmployeeReportsPage() {
                               {/* Info */}
                               <div className="flex items-center gap-4 flex-1 min-w-0">
                                 <div className="min-w-0 w-36">
-                                  <p className="text-sm font-medium truncate">{report.name}</p>
+                                <p className="text-sm font-medium truncate">{report.name}</p>
                                   <p className="text-xs text-muted-foreground font-mono">{report.employeeId}</p>
-                                </div>
-                                
+                              </div>
+                              
                                 <div className="hidden md:block text-xs text-muted-foreground w-28 truncate">
-                                  {report.department}
-                                </div>
-                                
+                                {report.department}
+                              </div>
+                              
                                 <div className="text-center flex-shrink-0 w-16">
                                   <p className="text-xs font-bold uppercase">{getShortDay(report.date)}</p>
                                   <p className="text-xs text-muted-foreground">{getShortDate(report.date)}</p>
-                                </div>
-                                
+                              </div>
+                              
                                 {/* Status badges */}
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                    report.status === 'working' 
+                                report.status === 'working' 
                                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
                                       : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                  }`}>
-                                    {report.status === 'working' ? 'Working' : 'Leave'}
-                                  </span>
-                                  
-                                  {report.onDuty && (
+                              }`}>
+                                {report.status === 'working' ? 'Working' : 'Leave'}
+                              </span>
+                              
+                              {report.onDuty && (
                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center gap-1">
                                       <Shield className="h-3 w-3" /> Duty
-                                    </span>
-                                  )}
-                                  
-                                  {isLateSubmission(report) && (
+                                </span>
+                              )}
+                              
+                              {isLateSubmission(report) && (
                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-500/10 text-red-600 dark:text-red-400 flex items-center gap-1">
                                       <Clock className="h-3 w-3" /> Late
-                                    </span>
-                                  )}
+                                </span>
+                              )}
                                 </div>
 
                                 {/* Preview */}
-                                {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
-                                  <p className="text-xs text-muted-foreground truncate flex-1 hidden lg:block">
+                              {report.workReport && expandedReportId !== report.id && editingReport?.id !== report.id && (
+                                <p className="text-xs text-muted-foreground truncate flex-1 hidden lg:block">
                                     {report.workReport.substring(0, 60)}{report.workReport.length > 60 ? '...' : ''}
-                                  </p>
-                                )}
-                              </div>
+                                </p>
+                              )}
+                            </div>
 
                               {/* Actions */}
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {canEdit(report) && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditClick(report);
-                                      setExpandedReportId(report.id);
-                                    }}
+                              {canEdit(report) && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditClick(report);
+                                    setExpandedReportId(report.id);
+                                  }}
                                     className="h-8 w-8 p-0"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
-                                  expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
-                                }`} />
-                              </div>
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${
+                                expandedReportId === report.id || editingReport?.id === report.id ? 'rotate-180' : ''
+                              }`} />
                             </div>
+                          </div>
 
-                            {/* Expanded Content */}
-                            {(expandedReportId === report.id || editingReport?.id === report.id) && (
+                          {/* Expanded Content */}
+                          {(expandedReportId === report.id || editingReport?.id === report.id) && (
                               <div className="px-4 pb-4 pt-2 ml-16 animate-fade-in">
                                 <div className="pl-4 border-l-2 border-border">
-                                  {editingReport?.id === report.id ? (
+                              {editingReport?.id === report.id ? (
                                     <div className="space-y-4 py-2">
-                                      <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between">
                                         <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                                           <CalendarDays className="h-4 w-4" />
                                           {formatDate(report.date)}
                                         </span>
-                                        <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                           <Button size="sm" variant="ghost" onClick={handleCancelEdit} disabled={saving} className="h-8 px-3">
                                             <X className="h-3.5 w-3.5 mr-1" /> Cancel
-                                          </Button>
-                                          <Button 
-                                            size="sm" 
-                                            onClick={handleSaveEdit} 
-                                            disabled={saving}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={handleSaveEdit}
+                                        disabled={saving}
                                             className="h-8 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
                                           >
                                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Check className="h-3.5 w-3.5 mr-1" /> Save</>}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                      
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  
                                       <div className="space-y-2">
-                                        <Label className="text-xs font-medium">Status</Label>
+                                    <Label className="text-xs font-medium">Status</Label>
                                         <div className="grid grid-cols-2 gap-3 max-w-md">
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditStatus('working')}
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStatus('working')}
                                             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                                              editStatus === 'working'
+                                          editStatus === 'working'
                                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30'
                                                 : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                                            }`}
-                                          >
+                                        }`}
+                                      >
                                             <Briefcase className="h-4 w-4" /> Working
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditStatus('leave')}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStatus('leave')}
                                             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                                              editStatus === 'leave'
+                                          editStatus === 'leave'
                                                 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-2 ring-amber-500/30'
                                                 : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                                            }`}
-                                          >
+                                        }`}
+                                      >
                                             <Coffee className="h-4 w-4" /> Leave
-                                          </button>
-                                        </div>
-                                      </div>
+                                      </button>
+                                    </div>
+                                  </div>
 
                                       <div className="space-y-2">
-                                        <Label className="text-xs font-medium">
-                                          Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
-                                        </Label>
-                                        <textarea
-                                          value={editWorkReport}
-                                          onChange={(e) => setEditWorkReport(e.target.value)}
+                                    <Label className="text-xs font-medium">
+                                      Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
+                                    </Label>
+                                    <textarea
+                                      value={editWorkReport}
+                                      onChange={(e) => setEditWorkReport(e.target.value)}
                                           placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
                                           className="flex min-h-28 w-full max-w-2xl rounded-xl border border-input bg-background/50 px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
-                                        />
-                                      </div>
-                                    </div>
-                                  ) : (
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
                                     <div className="py-2">
-                                      {report.workReport ? (
+                                  {report.workReport ? (
                                         <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
-                                          {report.workReport}
-                                        </p>
-                                      ) : (
+                                      {report.workReport}
+                                    </p>
+                                  ) : (
                                         <p className="text-sm text-muted-foreground italic">No details provided</p>
-                                      )}
-                                    </div>
                                   )}
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                              )}
+                                </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
+                  </div>
                   )}
                 </>
               )}
@@ -1135,6 +1156,24 @@ export default function EmployeeReportsPage() {
                 <code className="px-2.5 py-1 bg-muted rounded-lg font-mono">John Doe</code>
                 <span>or select a department</span>
               </div>
+            </div>
+          )}
+          </div>
+
+          {/* Calendar Sidebar - Only for employees */}
+          {session?.role === 'employee' && (
+            <div className="lg:sticky lg:top-20 h-fit">
+              <WorkReportCalendar 
+                reports={allReports.length > 0 ? allReports : reports} 
+                holidays={holidays}
+                onDateClick={(date) => {
+                  const report = (allReports.length > 0 ? allReports : reports).find(r => r.date === date);
+                  if (report) {
+                    setExpandedReportId(report.id);
+                    document.getElementById(`report-${report.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }}
+              />
             </div>
           )}
         </div>
