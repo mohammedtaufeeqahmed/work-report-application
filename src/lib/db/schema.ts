@@ -143,6 +143,7 @@ export const workReports = pgTable('work_reports', {
   status: text('status', { enum: ['working', 'leave', 'absent'] }).notNull(),
   workReport: text('work_report'),
   onDuty: boolean('on_duty').default(false).notNull(),
+  halfday: boolean('halfday').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('idx_work_reports_employee_id').on(table.employeeId),

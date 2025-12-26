@@ -84,6 +84,7 @@ export interface WorkReport {
   status: WorkStatus;
   workReport: string | null;
   onDuty: boolean;
+  halfday: boolean;
   createdAt: string;
 }
 
@@ -171,6 +172,7 @@ export interface CreateWorkReportInput {
   status: WorkStatus;
   workReport?: string | null;
   onDuty?: boolean;
+  halfday?: boolean;
 }
 
 // Update work report input
@@ -178,6 +180,7 @@ export interface UpdateWorkReportInput {
   status?: WorkStatus;
   workReport?: string | null;
   onDuty?: boolean;
+  halfday?: boolean;
 }
 
 // Create entity input

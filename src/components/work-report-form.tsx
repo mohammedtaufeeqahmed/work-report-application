@@ -24,6 +24,7 @@ export function WorkReportForm() {
   const [status, setStatus] = useState<WorkStatus>('working'); // Default to 'working'
   const [workReport, setWorkReport] = useState('');
   const [onDuty, setOnDuty] = useState(false); // On Duty checkbox (optional when working)
+  const [halfday, setHalfday] = useState(false); // Halfday checkbox (optional when working)
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   
@@ -196,6 +197,7 @@ export function WorkReportForm() {
           status,
           workReport: workReport.trim() || null,
           onDuty: status === 'working' ? onDuty : false,
+          halfday: status === 'working' ? halfday : false,
         }),
       });
 
@@ -270,6 +272,7 @@ export function WorkReportForm() {
     setStatus('working');
     setWorkReport('');
     setOnDuty(false);
+    setHalfday(false);
     setSelectedDate(today);
     setSubmitted(false);
     
@@ -488,42 +491,80 @@ export function WorkReportForm() {
           </div>
         )}
 
-        {/* On Duty Checkbox - Only shown when status is 'working' */}
+        {/* On Duty and Halfday Checkboxes - Only shown when status is 'working' */}
         {employeeData && !employeeData.hasSubmittedToday && status === 'working' && (
-          <div className="animate-fade-in">
-            <label className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={onDuty}
-                  onChange={(e) => setOnDuty(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                  onDuty 
-                    ? 'bg-blue-600 border-blue-600' 
-                    : 'border-muted-foreground/40 bg-background'
-                }`}>
-                  {onDuty && (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
+          <div className="animate-fade-in space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* On Duty Checkbox */}
+              <label className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={onDuty}
+                    onChange={(e) => setOnDuty(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    onDuty 
+                      ? 'bg-blue-600 border-blue-600' 
+                      : 'border-muted-foreground/40 bg-background'
+                  }`}>
+                    {onDuty && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Shield className={`h-4 w-4 ${onDuty ? 'text-blue-600' : 'text-muted-foreground'}`} />
-                  <span className={`text-sm font-medium ${onDuty ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    On Duty
-                  </span>
-                  <span className="text-xs text-muted-foreground">(Optional)</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Shield className={`h-4 w-4 ${onDuty ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                    <span className={`text-sm font-medium ${onDuty ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      On Duty
+                    </span>
+                    <span className="text-xs text-muted-foreground">(Optional)</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Mark if you are on duty today
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Mark if you are on duty today
-                </p>
-              </div>
-            </label>
+              </label>
+
+              {/* Halfday Checkbox */}
+              <label className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={halfday}
+                    onChange={(e) => setHalfday(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                    halfday 
+                      ? 'bg-yellow-600 border-yellow-600' 
+                      : 'border-muted-foreground/40 bg-background'
+                  }`}>
+                    {halfday && (
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Calendar className={`h-4 w-4 ${halfday ? 'text-yellow-600' : 'text-muted-foreground'}`} />
+                    <span className={`text-sm font-medium ${halfday ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      Halfday
+                    </span>
+                    <span className="text-xs text-muted-foreground">(Optional)</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Mark if you worked half day
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
         )}
 

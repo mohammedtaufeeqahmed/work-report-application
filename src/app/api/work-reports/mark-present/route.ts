@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
         existingReport.id,
         'working',
         null, // No work report required when Operations/Manager marks as present
-        false // onDuty
+        false, // onDuty
+        false // halfday
       );
 
       return NextResponse.json<ApiResponse<WorkReport>>({
@@ -120,6 +121,7 @@ export async function POST(request: NextRequest) {
         status: 'working',
         workReport: null,
         onDuty: false,
+        halfday: false,
       });
 
       return NextResponse.json<ApiResponse<WorkReport>>({

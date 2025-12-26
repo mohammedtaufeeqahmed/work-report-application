@@ -405,6 +405,14 @@ export default function ManagersDashboardPage() {
                 </span>
               )}
 
+              {/* Halfday Badge */}
+              {report.halfday && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400">
+                  <Calendar className="h-3 w-3" />
+                  Halfday
+                </span>
+              )}
+
               {/* Late Submission Badge */}
               {isLateSubmission(report) && (
                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400">

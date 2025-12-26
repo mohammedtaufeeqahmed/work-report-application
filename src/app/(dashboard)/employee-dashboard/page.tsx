@@ -22,6 +22,7 @@ import {
   Clock,
   CheckCircle2,
   CalendarDays,
+  Calendar,
   ArrowRight,
   Lock,
   Sparkles,
@@ -529,6 +530,12 @@ export default function EmployeeDashboardPage() {
                                 {report.onDuty && (
                                   <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                     <Shield className="w-3 h-3" /> Duty
+                                  </span>
+                                )}
+                                
+                                {report.halfday && (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                                    <Calendar className="w-3 h-3" /> Halfday
                                   </span>
                                 )}
                                 

@@ -149,7 +149,7 @@ export async function PUT(
 
     // Parse the request body
     const body: UpdateWorkReportInput = await request.json();
-    const { status, workReport, onDuty } = body;
+    const { status, workReport, onDuty, halfday } = body;
 
     // Validate status if provided
     if (status && status !== 'working' && status !== 'leave') {
@@ -162,8 +162,9 @@ export async function PUT(
     // If status is working, work report is required
     const newStatus = status || report.status;
     const newWorkReport = workReport !== undefined ? workReport : report.workReport;
-    // onDuty is only applicable when status is working
+    // onDuty and halfday are only applicable when status is working
     const newOnDuty = newStatus === 'working' ? (onDuty !== undefined ? onDuty : report.onDuty) : false;
+    const newHalfday = newStatus === 'working' ? (halfday !== undefined ? halfday : report.halfday) : false;
 
     // Check if this is a manager editing a team member (isOwnReport already declared above)
     const isManagerEditingTeamMember = session.role === 'manager' && !isOwnReport;
@@ -190,7 +191,7 @@ export async function PUT(
     }
 
     // Update the report
-    const updatedReport = await updateWorkReport(reportId, newStatus, newWorkReport, newOnDuty);
+    const updatedReport = await updateWorkReport(reportId, newStatus, newWorkReport, newOnDuty, newHalfday);
 
     if (!updatedReport) {
       return NextResponse.json<ApiResponse>(

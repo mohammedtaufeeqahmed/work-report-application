@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
         existingReport.id,
         'leave',
         null, // Clear work report when marking as absent
-        false // onDuty
+        false, // onDuty
+        false // halfday
       );
 
       return NextResponse.json<ApiResponse<WorkReport>>({
@@ -120,6 +121,7 @@ export async function POST(request: NextRequest) {
         status: 'leave',
         workReport: null,
         onDuty: false,
+        halfday: false,
       });
 
       return NextResponse.json<ApiResponse<WorkReport>>({

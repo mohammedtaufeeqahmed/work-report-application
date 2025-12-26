@@ -8,7 +8,7 @@ import type { ApiResponse, CreateWorkReportInput } from '@/types';
 export async function POST(request: NextRequest) {
   try {
     const body: CreateWorkReportInput = await request.json();
-    const { employeeId, date, name, email, department, status, workReport, onDuty } = body;
+    const { employeeId, date, name, email, department, status, workReport, onDuty, halfday } = body;
 
     // Validate required fields
     if (!employeeId || !date || !name || !email || !department || !status) {
@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
           existingReport.id,
           existingReport.status, // Keep existing status
           workReport.trim(),
-          existingReport.onDuty // Keep existing onDuty
+          existingReport.onDuty, // Keep existing onDuty
+          halfday !== undefined ? halfday : existingReport.halfday // Update halfday if provided
         );
         
         if (updatedReport) {
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
       status,
       workReport: workReport || null,
       onDuty: status === 'working' ? (onDuty || false) : false,
+      halfday: status === 'working' ? (halfday || false) : false,
     });
 
     // Return success with queue ID

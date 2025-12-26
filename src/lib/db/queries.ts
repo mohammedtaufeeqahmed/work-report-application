@@ -112,6 +112,7 @@ function toWorkReport(row: typeof workReports.$inferSelect): WorkReport {
     status: row.status as WorkReport['status'],
     workReport: row.workReport,
     onDuty: row.onDuty,
+    halfday: row.halfday,
     createdAt: toISOString(row.createdAt),
   };
 }
@@ -633,6 +634,7 @@ export async function createWorkReport(input: CreateWorkReportInput): Promise<Wo
       status: input.status,
       workReport: input.workReport ?? null,
       onDuty: input.onDuty ?? false,
+      halfday: input.halfday ?? false,
     })
     .returning();
   if (!Array.isArray(result) || result.length === 0) {
@@ -844,7 +846,8 @@ export async function updateWorkReport(
   id: number,
   status: string,
   workReport: string | null,
-  onDuty?: boolean
+  onDuty?: boolean,
+  halfday?: boolean
 ): Promise<WorkReport | null> {
   const updateData: Record<string, unknown> = {
     status,
@@ -853,6 +856,10 @@ export async function updateWorkReport(
 
   if (onDuty !== undefined) {
     updateData.onDuty = onDuty;
+  }
+
+  if (halfday !== undefined) {
+    updateData.halfday = halfday;
   }
 
   await db.update(workReports).set(updateData).where(eq(workReports.id, id));
