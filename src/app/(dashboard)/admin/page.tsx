@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Plus, Users, Search, Pencil, Trash2, X, Key, Upload, Download, FileJson, FileSpreadsheet, Check, Filter, UserX, UserCheck, CheckCircle2, Calendar, Building2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SafeEmployee, SessionUser, Department } from '@/types';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { getISTTodayDateString, getFullDateIST } from '@/lib/date';
 import type { SafeEmployee as SafeEmployeeType } from '@/types';
 
@@ -50,6 +50,12 @@ export default function AdminPage() {
   const [templateDownloaded, setTemplateDownloaded] = useState(false);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+
+  // Confirmation dialog
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
 
   // Mark Absent state
   const [markingAbsent, setMarkingAbsent] = useState<string | null>(null);
@@ -114,6 +120,18 @@ export default function AdminPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Show confirmation dialog
+    setConfirmTitle('Create User');
+    setConfirmMessage('Are you sure you want to create this user with the specified settings?');
+    setConfirmAction(() => async () => {
+      setShowConfirmDialog(false);
+      await performCreateUser();
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const performCreateUser = async () => {
     setCreating(true);
 
     try {
@@ -219,6 +237,19 @@ export default function AdminPage() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser) return;
+
+    // Show confirmation dialog
+    setConfirmTitle('Update User');
+    setConfirmMessage(`Are you sure you want to save the changes for ${editingUser.name}? This will update their settings.`);
+    setConfirmAction(() => async () => {
+      setShowConfirmDialog(false);
+      await performUpdateUser();
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const performUpdateUser = async () => {
     if (!editingUser) return;
 
     setUpdatingUser(true);
@@ -1557,6 +1588,36 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmTitle}</DialogTitle>
+            <DialogDescription>{confirmMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setConfirmAction(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirmAction) {
+                  confirmAction();
+                }
+              }}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

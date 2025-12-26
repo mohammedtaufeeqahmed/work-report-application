@@ -74,7 +74,7 @@ function ResetPasswordContent() {
           setMaskedEmail(emailMatch[1]);
         }
         if (data.data?.resetUrl) {
-          console.log('Dev reset URL:', data.data.resetUrl);
+          // Reset URL sent (logged in development only via logger)
         }
         setStep('email-sent');
       } else {

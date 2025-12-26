@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Plus, Building2, GitBranch, Users, Search, Trash2, UserX, UserCheck, FolderTree, X, Pencil, Key, Settings, Shield, Upload, Download, FileJson, FileSpreadsheet, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SafeEmployee, Entity, Branch, Department, EditPermissions, PageAccess } from '@/types';
@@ -88,6 +89,12 @@ export default function SuperAdminPage() {
   const [templateDownloaded, setTemplateDownloaded] = useState(false);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null);
+
+  // Confirmation dialog
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -238,6 +245,18 @@ export default function SuperAdminPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Show confirmation dialog
+    setConfirmTitle('Create User');
+    setConfirmMessage('Are you sure you want to create this user with the specified permissions and settings?');
+    setConfirmAction(() => async () => {
+      setShowConfirmDialog(false);
+      await performCreateUser();
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const performCreateUser = async () => {
     setCreatingUser(true);
 
     try {
@@ -372,8 +391,16 @@ export default function SuperAdminPage() {
       status: user.status,
     });
     
-    // Set page access from user or defaults
-    setEditPageAccess(user.pageAccess || DEFAULT_PAGE_ACCESS[user.role]);
+    // Set page access from user or defaults - merge to ensure all fields are present
+    if (user.pageAccess) {
+      // Merge saved pageAccess with defaults to ensure all fields are present
+      setEditPageAccess({
+        ...DEFAULT_PAGE_ACCESS[user.role],
+        ...user.pageAccess,
+      });
+    } else {
+      setEditPageAccess(DEFAULT_PAGE_ACCESS[user.role]);
+    }
 
     // If user is a manager or Operations department, fetch their departments
     if (user.role === 'manager' || user.department === 'Operations') {
@@ -398,6 +425,19 @@ export default function SuperAdminPage() {
     e.preventDefault();
     if (!editingUser) return;
 
+    // Show confirmation dialog
+    setConfirmTitle('Update User');
+    setConfirmMessage(`Are you sure you want to save the changes for ${editingUser.name}? This will update their permissions and settings.`);
+    setConfirmAction(() => async () => {
+      setShowConfirmDialog(false);
+      await performUpdateUser();
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const performUpdateUser = async () => {
+    if (!editingUser) return;
+
     setUpdatingUser(true);
 
     try {
@@ -413,7 +453,11 @@ export default function SuperAdminPage() {
       if (editFormData.role !== editingUser.role) updatePayload.role = editFormData.role;
       if (editFormData.status !== editingUser.status) updatePayload.status = editFormData.status;
 
-      // Include page access for all roles (employees can have mark_attendance permission)
+      // Always include page access - compare with original to ensure we save changes
+      const originalPageAccess = editingUser.pageAccess || DEFAULT_PAGE_ACCESS[editingUser.role];
+      const pageAccessChanged = JSON.stringify(originalPageAccess) !== JSON.stringify(editPageAccess);
+      
+      // Always send pageAccess to ensure it's saved (even if it matches, to handle null cases)
       updatePayload.pageAccess = editPageAccess;
 
       // For manager, update department to primary selected
@@ -450,6 +494,14 @@ export default function SuperAdminPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ departmentIds: editFormData.departmentIds }),
           });
+        }
+
+        // Update the user in the local state with the response data to ensure latest pageAccess is reflected
+        if (data.data) {
+          const updatedUser = data.data as SafeEmployee;
+          setUsers(prevUsers => 
+            prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u)
+          );
         }
 
         toast.success('User updated successfully');
@@ -2327,6 +2379,36 @@ export default function SuperAdminPage() {
         )}
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmTitle}</DialogTitle>
+            <DialogDescription>{confirmMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowConfirmDialog(false);
+                setConfirmAction(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirmAction) {
+                  confirmAction();
+                }
+              }}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

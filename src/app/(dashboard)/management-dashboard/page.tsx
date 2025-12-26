@@ -528,10 +528,10 @@ export default function ManagementDashboardPage() {
               <div className="overflow-x-auto -mx-5 sm:mx-0">
                 <div className="inline-block min-w-full align-middle px-5 sm:px-0">
                   <div className="overflow-visible">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-muted/50 border-b">
-                          <th className="text-left py-3 px-3 sm:px-4 font-medium sticky left-0 z-30 bg-muted/50 min-w-[240px] sm:min-w-[280px] border-r border-border/50">
+                          <th className="text-left py-3 px-3 sm:px-4 font-medium sticky left-0 z-40 bg-muted/50 dark:bg-muted/80 backdrop-blur-sm min-w-[240px] sm:min-w-[280px] border-r border-border/50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]">
                             <span className="hidden sm:inline">Employee</span>
                             <span className="sm:hidden">Emp</span>
                           </th>
@@ -543,7 +543,7 @@ export default function ManagementDashboardPage() {
                               {day}
                             </th>
                           ))}
-                          <th className="text-center py-3 px-3 sm:px-4 font-medium sticky right-0 z-30 bg-muted/50 min-w-[70px] sm:min-w-[80px] border-l border-border/50">
+                          <th className="text-center py-3 px-3 sm:px-4 font-medium sticky right-0 z-40 bg-muted/50 dark:bg-muted/80 backdrop-blur-sm min-w-[70px] sm:min-w-[80px] border-l border-border/50 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)] dark:shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.3)]">
                             Summary
                           </th>
                         </tr>
@@ -556,17 +556,19 @@ export default function ManagementDashboardPage() {
                             return status && status !== 'future' && status !== 'sunday';
                           }).length;
                           
+                          const isEvenRow = index % 2 === 0;
+                          const rowBgClass = isEvenRow ? 'bg-background' : 'bg-muted/10';
+                          const stickyBgClass = isEvenRow 
+                            ? 'bg-background dark:bg-background' 
+                            : 'bg-muted/10 dark:bg-muted/20';
+                          
                           return (
                             <tr 
                               key={employee.employeeId} 
-                              className={`hover:bg-muted/30 transition-colors ${
-                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
-                              }`}
+                              className={`hover:bg-muted/30 transition-colors ${rowBgClass}`}
                             >
                               {/* Employee Profile Column */}
-                              <td className={`py-3 px-3 sm:px-4 sticky left-0 z-20 min-w-[240px] sm:min-w-[280px] border-r border-border/50 ${
-                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
-                              }`}>
+                              <td className={`py-3 px-3 sm:px-4 sticky left-0 z-30 ${stickyBgClass} backdrop-blur-sm min-w-[240px] sm:min-w-[280px] border-r border-border/50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]`}>
                                 <div className="flex items-center gap-2 sm:gap-3">
                                   <Avatar className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0">
                                     <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs sm:text-sm">
@@ -585,15 +587,13 @@ export default function ManagementDashboardPage() {
                               
                               {/* Daily Status Cells */}
                               {daysArray.map(({ dateStr }) => (
-                                <td key={dateStr} className="py-2 sm:py-3 px-1 sm:px-2 text-center align-middle">
+                                <td key={dateStr} className={`py-2 sm:py-3 px-1 sm:px-2 text-center align-middle ${rowBgClass}`}>
                                   {getStatusCell(employee.dailyStatus[dateStr])}
                                 </td>
                               ))}
                               
                               {/* Summary Counter */}
-                              <td className={`py-3 px-3 sm:px-4 text-center sticky right-0 z-20 min-w-[70px] sm:min-w-[80px] border-l border-border/50 ${
-                                index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
-                              }`}>
+                              <td className={`py-3 px-3 sm:px-4 text-center sticky right-0 z-30 ${stickyBgClass} backdrop-blur-sm min-w-[70px] sm:min-w-[80px] border-l border-border/50 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)] dark:shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.3)]`}>
                                 <span className="text-xs sm:text-sm font-semibold text-muted-foreground">
                                   {employee.submittedCount}/{totalWorkingDays || employee.workingDaysCount}
                                 </span>
