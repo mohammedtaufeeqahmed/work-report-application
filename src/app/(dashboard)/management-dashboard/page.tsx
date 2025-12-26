@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Users, Calendar, Briefcase, Coffee, ChevronLeft, ChevronRight, Filter, X, TrendingUp, Building2, Check, Clock, Building } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { logger } from '@/lib/logger';
 import type { Entity, Branch, Department } from '@/types';
 
 interface EmployeeReportStatus {
@@ -62,35 +63,13 @@ export default function ManagementDashboardPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
 
-  useEffect(() => {
-    fetchAnalytics();
-    // Set current date string on client mount to avoid hydration mismatch
-    setCurrentDateStr(new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
-  }, []);
-
-  useEffect(() => {
-    fetchMonthlyStatus();
-  }, [fetchMonthlyStatus]);
-
-  // Refresh data when window regains focus (in case holidays were updated in another tab)
-  useEffect(() => {
-    const handleFocus = () => {
-      // Only refresh if we have data loaded (avoid unnecessary calls on initial load)
-      if (statusData) {
-        fetchMonthlyStatus();
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [statusData, fetchMonthlyStatus]);
-
   const fetchAnalytics = async () => {
     try {
       const response = await fetch('/api/analytics?days=30');
       const result = await response.json();
       if (result.success) setAnalyticsData(result.data);
-    } catch {
-      console.error('Failed to load analytics');
+    } catch (error) {
+      logger.error('Failed to load analytics', error);
     }
   };
 
@@ -119,6 +98,28 @@ export default function ManagementDashboardPage() {
       setLoading(false);
     }
   }, [selectedYear, selectedMonth, selectedEntity, selectedBranch, selectedDepartment]);
+
+  useEffect(() => {
+    fetchAnalytics();
+    // Set current date string on client mount to avoid hydration mismatch
+    setCurrentDateStr(new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+  }, []);
+
+  useEffect(() => {
+    fetchMonthlyStatus();
+  }, [fetchMonthlyStatus]);
+
+  // Refresh data when window regains focus (in case holidays were updated in another tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Only refresh if we have data loaded (avoid unnecessary calls on initial load)
+      if (statusData) {
+        fetchMonthlyStatus();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [statusData, fetchMonthlyStatus]);
 
   const handlePrevMonth = () => {
     if (selectedMonth === 1) {
