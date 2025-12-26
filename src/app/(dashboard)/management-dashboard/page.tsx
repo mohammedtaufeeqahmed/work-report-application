@@ -199,7 +199,7 @@ export default function ManagementDashboardPage() {
     
     return Object.entries(deptMap)
       .map(([department, stats]) => ({ department, ...stats }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => a.department.localeCompare(b.department));
   }, [statusData]);
 
   // Get department tag color
