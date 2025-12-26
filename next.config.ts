@@ -4,41 +4,8 @@ import withPWA from "next-pwa";
 const nextConfig: NextConfig = {
   // Enable standalone output for optimized Docker builds
   output: 'standalone',
-  // Webpack config - next-pwa will modify this automatically
-  webpack: (config, { isServer, dev }) => {
-    // Production optimizations
-    if (!dev && !isServer) {
-      // Optimize bundle splitting
-      config.optimization = {
-        ...config.optimization,
-        moduleIds: 'deterministic',
-        runtimeChunk: 'single',
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            default: false,
-            vendors: false,
-            // Vendor chunk for node_modules
-            vendor: {
-              name: 'vendor',
-              chunks: 'all',
-              test: /node_modules/,
-              priority: 20,
-            },
-            // Common chunk for shared code
-            common: {
-              name: 'common',
-              minChunks: 2,
-              chunks: 'all',
-              priority: 10,
-              reuseExistingChunk: true,
-            },
-          },
-        },
-      };
-    }
-    return config;
-  },
+  // Note: webpack config removed to avoid conflicts with next-pwa
+  // next-pwa will handle webpack modifications automatically
   // Optimize images
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -74,7 +41,7 @@ const pwaConfig = withPWA({
   dest: "public",
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === "development",
+  disable: process.env.NODE_ENV === "development" || process.env.DISABLE_PWA === "true",
   // Exclude problematic files from PWA build that conflict with standalone
   buildExcludes: [
     /middleware-manifest\.json$/,
@@ -83,14 +50,26 @@ const pwaConfig = withPWA({
     /server\/middleware\.js$/,
     /server\/middleware\.js\.map$/,
     /\.next\/server\/.*/,
+    /\.next\/server\/middleware\.js$/,
   ],
   // Use a custom service worker filename
   sw: 'sw.js',
   // Ensure proper scope
   scope: '/',
-  // Disable automatic registration during build to avoid conflicts
-  // The service worker will be registered at runtime
-  runtimeCaching: [],
+  // Add basic runtime caching strategy
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'google-fonts',
+        expiration: {
+          maxEntries: 4,
+          maxAgeSeconds: 365 * 24 * 60 * 60, // 365 days
+        },
+      },
+    },
+  ],
 });
 
 export default pwaConfig(nextConfig);

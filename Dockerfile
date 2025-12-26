@@ -18,6 +18,8 @@ COPY . .
 
 # Build the application with increased memory
 # Use standalone output to reduce build size
+# Temporarily disable PWA during Docker build due to Next.js 16 compatibility issues
+ENV DISABLE_PWA=true
 RUN npm run build
 
 # Production stage
