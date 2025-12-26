@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "build:prod": "NODE_ENV=production next build --webpack",
     "start": "next start",
+    "start:prod": "NODE_ENV=production next start",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
