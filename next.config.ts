@@ -28,10 +28,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Generate source maps only in development
   productionBrowserSourceMaps: false,
-  // Optimize fonts
-  optimizeFonts: true,
   // SWC minification is enabled by default in Next.js 16
-  // Font optimization is handled automatically
+  // Font optimization is handled automatically by Next.js
 };
 
 // Configure PWA with proper exclusions for Next.js 16 standalone mode

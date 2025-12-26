@@ -22,7 +22,6 @@ import {
   Clock,
   CheckCircle2,
   CalendarDays,
-  Calendar,
   ArrowRight,
   Lock,
   Sparkles,
