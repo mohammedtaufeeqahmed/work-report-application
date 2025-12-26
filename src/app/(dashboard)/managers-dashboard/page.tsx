@@ -296,11 +296,11 @@ export default function ManagersDashboardPage() {
 
     // 2. Department Line Data (For Multi Dept Manager - All Depts)
     // Structure: { date: displayDate, DeptA: count, DeptB: count, ..., _sortKey: isoDate }
-    const statsByIsoDate: Record<string, any> = {};
+    const statsByIsoDate: Record<string, { date: string; _sortKey: string; [key: string]: string | number }> = {};
 
     // 3. Employee Line Data (For Multi Dept Manager - Filtered Dept)
     // Structure: { date: displayDate, EmpA: count, EmpB: count, ..., _sortKey: isoDate }
-    const empStatsByIsoDate: Record<string, any> = {};
+    const empStatsByIsoDate: Record<string, { date: string; _sortKey: string; [key: string]: string | number }> = {};
     const allEmpNames = new Set<string>();
 
     // Single loop to calculate all stats efficiently
@@ -338,10 +338,10 @@ export default function ManagersDashboardPage() {
 
     // Sort line data by ISO date for correct chronological order
     const departmentLineData = Object.values(statsByIsoDate)
-      .sort((a: any, b: any) => a._sortKey.localeCompare(b._sortKey));
+      .sort((a, b) => a._sortKey.localeCompare(b._sortKey));
 
     const employeeLineData = Object.values(empStatsByIsoDate)
-      .sort((a: any, b: any) => a._sortKey.localeCompare(b._sortKey));
+      .sort((a, b) => a._sortKey.localeCompare(b._sortKey));
 
     return {
       employeeBarData,

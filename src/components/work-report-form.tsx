@@ -128,7 +128,7 @@ export function WorkReportForm() {
       const response = await fetch(`/api/work-reports?employeeId=${empId}`);
       const data = await response.json();
       if (data.success && data.data.reports) {
-        const existing = data.data.reports.find((r: any) => r.date === date);
+        const existing = data.data.reports.find((r: { date: string }) => r.date === date);
         return !!existing;
       }
       return false;

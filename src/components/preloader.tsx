@@ -59,7 +59,11 @@ export function Preloader() {
 
   // Initialize and detect theme
   useEffect(() => {
-    setMounted(true);
+    // Use setTimeout to avoid setState in effect warning
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    
     glitchText(MESSAGES[0]);
     
     // Detect theme from document or default to light
@@ -70,7 +74,7 @@ export function Preloader() {
           const hasDark = html.classList.contains('dark');
           setIsDark(hasDark);
         }
-      } catch (e) {
+      } catch {
         setIsDark(false);
       }
     };
@@ -88,17 +92,27 @@ export function Preloader() {
         attributeFilter: ['class']
       });
       
-      return () => observer.disconnect();
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
     }
+    
+    return () => clearTimeout(timer);
   }, [glitchText]);
   
   // Update theme when useTheme values change
   useEffect(() => {
-    if (resolvedTheme) {
-      setIsDark(resolvedTheme === 'dark');
-    } else if (theme) {
-      setIsDark(theme === 'dark');
-    }
+    // Use setTimeout to avoid setState in effect warning
+    const timer = setTimeout(() => {
+      if (resolvedTheme) {
+        setIsDark(resolvedTheme === 'dark');
+      } else if (theme) {
+        setIsDark(theme === 'dark');
+      }
+    }, 0);
+    
+    return () => clearTimeout(timer);
   }, [theme, resolvedTheme]);
 
   // Progress logic - Fixed 3 seconds duration
@@ -110,7 +124,7 @@ export function Preloader() {
 
     let currentProgress = 0;
     let lastMessageIndex = -1;
-    let startTime = Date.now();
+    const startTime = Date.now();
 
     progressIntervalRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;

@@ -92,15 +92,24 @@ export function Navbar() {
   const isBoardMember = user?.role === 'boardmember';
 
   // Build nav links based on pageAccess permissions
-  const navLinks = [
-    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' as keyof PageAccess },
-    { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' as keyof PageAccess },
+  type NavLink = {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    requireAuth?: boolean;
+    accessKey: keyof PageAccess;
+    requireDepartment?: string;
+  };
+
+  const navLinks: NavLink[] = [
+    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' },
+    { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' },
     // Mark Attendance for Operations users with permission
-    { href: '/mark-attendance', label: 'Mark Attendance', icon: UserCheck, requireAuth: true, accessKey: 'mark_attendance' as keyof PageAccess, requireDepartment: 'Operations' },
+    { href: '/mark-attendance', label: 'Mark Attendance', icon: UserCheck, requireAuth: true, accessKey: 'mark_attendance', requireDepartment: 'Operations' },
   ].filter(link => {
     if (!user) return !link.requireAuth;
     // Check department requirement if specified
-    if ((link as any).requireDepartment && user.department !== (link as any).requireDepartment) {
+    if (link.requireDepartment && user.department !== link.requireDepartment) {
       return false;
     }
     return pageAccess?.[link.accessKey] === true;

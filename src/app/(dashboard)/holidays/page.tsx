@@ -375,7 +375,7 @@ export default function HolidaysPage() {
                       </div>
                       <h3 className="font-semibold text-lg mb-2">No Holidays</h3>
                       <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-                        No holidays have been marked for {selectedYear}. Click "Add Holiday" to get started.
+                        No holidays have been marked for {selectedYear}. Click &quot;Add Holiday&quot; to get started.
                       </p>
                       <Button onClick={handleAddClick} className="gap-2">
                         <Plus className="h-4 w-4" />
