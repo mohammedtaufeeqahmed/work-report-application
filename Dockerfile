@@ -5,13 +5,13 @@ WORKDIR /app
 
 # Increase Node.js memory limit for build (2GB - adjusted for smaller EC2 instances)
 ENV NODE_OPTIONS="--max-old-space-size=2048"
-ENV NODE_ENV=production
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (production only for smaller image)
-RUN npm ci --only=production=false && npm cache clean --force
+# Install all dependencies (including devDependencies needed for build)
+# Note: NODE_ENV is not set to production here, so devDependencies will be installed
+RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
