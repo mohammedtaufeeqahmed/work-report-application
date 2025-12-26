@@ -70,7 +70,7 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
   };
 
   // Get date status for color coding
-  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'working_halfday' | 'holiday' | 'sunday' | 'future' => {
+  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'working_halfday' | 'working_halfday_on_duty' | 'holiday' | 'sunday' | 'future' => {
     // Check if it's Sunday first (Sunday is always a holiday)
     if (isSunday(dateStr)) {
       return 'sunday';
@@ -94,6 +94,11 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
 
     if (report.status === 'leave') {
       return 'leave';
+    }
+
+    // Check for halfday + on duty combination first
+    if (report.status === 'working' && report.halfday && report.onDuty) {
+      return 'working_halfday_on_duty';
     }
 
     if (report.status === 'working' && report.onDuty) {
@@ -132,8 +137,11 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
       case 'leave':
         return `bg-orange-500 text-white ${isToday ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`;
       case 'working_on_duty':
-        // Diagonal split will be handled with absolute positioning
+        // Diagonal split: green/blue - will be handled with absolute positioning
         return `relative overflow-hidden ${isToday ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`;
+      case 'working_halfday_on_duty':
+        // Diagonal split: yellow/blue - will be handled with absolute positioning
+        return `relative overflow-hidden ${isToday ? 'ring-2 ring-yellow-400 ring-offset-2' : ''}`;
       case 'not_submitted':
         return `bg-red-500 text-white ${isToday ? 'ring-2 ring-red-400 ring-offset-2' : ''}`;
       case 'future':
@@ -160,6 +168,7 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
     const statusLabels: Record<string, string> = {
       'working': 'Working',
       'working_halfday': 'Half Day',
+      'working_halfday_on_duty': 'Half Day + On Duty',
       'leave': 'Leave',
       'working_on_duty': 'Working + On Duty',
       'not_submitted': 'Not Submitted',
@@ -270,6 +279,8 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
             const status = getDateStatus(dateStr);
             const isToday = dateStr === today;
             const isWorkingOnDuty = status === 'working_on_duty';
+            const isHalfdayOnDuty = status === 'working_halfday_on_duty';
+            const hasDiagonalSplit = isWorkingOnDuty || isHalfdayOnDuty;
             
             return (
               <button
@@ -293,7 +304,15 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
                     <span className="relative z-10 text-white">{day}</span>
                   </>
                 )}
-                {!isWorkingOnDuty && <span>{day}</span>}
+                {/* Diagonal split for halfday_on_duty: yellow (top-left) and blue (bottom-right) */}
+                {isHalfdayOnDuty && (
+                  <>
+                    <div className="absolute inset-0 bg-yellow-500" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
+                    <div className="absolute inset-0 bg-blue-600" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
+                    <span className="relative z-10 text-white">{day}</span>
+                  </>
+                )}
+                {!hasDiagonalSplit && <span>{day}</span>}
               </button>
             );
           })}
@@ -325,6 +344,13 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
                 <div className="absolute inset-0 bg-blue-600" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
               </div>
               <span className="text-muted-foreground font-medium">On Duty</span>
+            </div>
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div className="w-4 h-4 rounded-md relative overflow-hidden">
+                <div className="absolute inset-0 bg-yellow-500" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
+                <div className="absolute inset-0 bg-blue-600" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
+              </div>
+              <span className="text-muted-foreground font-medium">Half + Duty</span>
             </div>
             <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
               <div className="w-4 h-4 rounded-md bg-gray-500 shadow-sm"></div>
