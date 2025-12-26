@@ -20,33 +20,7 @@ export async function POST() {
 
     const migrations: { name: string; success: boolean; error?: string }[] = [];
 
-    // Migration 1: Add halfday column to work_reports if it doesn't exist
-    try {
-      const checkHalfday = await pool.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.columns 
-          WHERE table_name = 'work_reports' AND column_name = 'halfday'
-        ) as exists
-      `);
-      
-      if (!checkHalfday.rows[0].exists) {
-        await pool.query(`
-          ALTER TABLE work_reports 
-          ADD COLUMN halfday BOOLEAN DEFAULT FALSE NOT NULL
-        `);
-        migrations.push({ name: 'add_halfday_column', success: true });
-      } else {
-        migrations.push({ name: 'add_halfday_column', success: true, error: 'Column already exists' });
-      }
-    } catch (error) {
-      migrations.push({ 
-        name: 'add_halfday_column', 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      });
-    }
-
-    // Migration 2: Add on_duty column if it doesn't exist (in case it's also missing)
+    // Migration 1: Add on_duty column if it doesn't exist (in case it's also missing)
     try {
       const checkOnDuty = await pool.query(`
         SELECT EXISTS (
@@ -72,7 +46,7 @@ export async function POST() {
       });
     }
 
-    // Migration 3: Create holidays table if it doesn't exist
+    // Migration 2: Create holidays table if it doesn't exist
     try {
       const checkHolidays = await pool.query(`
         SELECT EXISTS (
@@ -130,7 +104,6 @@ export async function GET() {
   return NextResponse.json({
     message: 'Use POST request to run migrations. Requires superadmin authentication.',
     availableMigrations: [
-      'add_halfday_column - Adds halfday column to work_reports table',
       'add_on_duty_column - Adds on_duty column to work_reports table', 
       'create_holidays_table - Creates holidays table if missing',
     ],
