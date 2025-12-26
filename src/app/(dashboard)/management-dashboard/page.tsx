@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Users, Calendar, Briefcase, Coffee, ChevronLeft, ChevronRight, Filter, X, TrendingUp, Building2, Check, Clock, Building } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -70,7 +70,19 @@ export default function ManagementDashboardPage() {
 
   useEffect(() => {
     fetchMonthlyStatus();
-  }, [selectedYear, selectedMonth, selectedEntity, selectedBranch, selectedDepartment]);
+  }, [fetchMonthlyStatus]);
+
+  // Refresh data when window regains focus (in case holidays were updated in another tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Only refresh if we have data loaded (avoid unnecessary calls on initial load)
+      if (statusData) {
+        fetchMonthlyStatus();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [statusData, fetchMonthlyStatus]);
 
   const fetchAnalytics = async () => {
     try {
@@ -82,7 +94,7 @@ export default function ManagementDashboardPage() {
     }
   };
 
-  const fetchMonthlyStatus = async () => {
+  const fetchMonthlyStatus = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -106,7 +118,7 @@ export default function ManagementDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedYear, selectedMonth, selectedEntity, selectedBranch, selectedDepartment]);
 
   const handlePrevMonth = () => {
     if (selectedMonth === 1) {

@@ -6,7 +6,8 @@ import {
   getWorkReportsByDateRange,
   getAllEntities,
   getAllBranches,
-  getAllDepartments
+  getAllDepartments,
+  getHolidays
 } from '@/lib/db/queries';
 import type { ApiResponse, Entity, Branch, Department, SafeEmployee, WorkReport } from '@/types';
 
@@ -85,6 +86,10 @@ export async function GET(request: NextRequest) {
     // Get all work reports for the month
     const workReports: WorkReport[] = await getWorkReportsByDateRange(startDate, endDate);
 
+    // Get holidays for the month
+    const holidays = await getHolidays(undefined, startDate, endDate);
+    const holidayDates = new Set(holidays.map(h => h.date));
+
     // Create a map of employee reports by date
     const reportMap = new Map<string, WorkReport>();
     for (const report of workReports) {
@@ -107,8 +112,9 @@ export async function GET(request: NextRequest) {
         const dateObj = new Date(year, month - 1, day);
         dateObj.setHours(0, 0, 0, 0);
         
-        if (isSunday(year, month, day)) {
-          dailyStatus[dateStr] = 'sunday';
+        // Check if it's a holiday (from holidays table) or Sunday
+        if (holidayDates.has(dateStr) || isSunday(year, month, day)) {
+          dailyStatus[dateStr] = 'sunday'; // Use 'sunday' status for both holidays and Sundays
         } else if (dateObj > today) {
           // Future date - mark as future, don't count
           dailyStatus[dateStr] = 'future';
