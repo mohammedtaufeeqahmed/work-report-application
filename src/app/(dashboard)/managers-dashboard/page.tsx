@@ -9,7 +9,7 @@ import { Loader2, Search, Users, Calendar, Filter, Shield, UserX, CheckCircle2, 
 import { toast } from 'sonner';
 import type { WorkReport, SafeEmployee, SessionUser, Department } from '@/types';
 import { getISTDateRangeFromDays, getISTTodayDateString, getFullDateIST, getShortDayIST, getShortDateIST, convertUTCToISTDate, getISTTodayRange } from '@/lib/date';
-import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts';
 
 export default function ManagersDashboardPage() {
   const [loading, setLoading] = useState(false);
@@ -295,17 +295,17 @@ export default function ManagersDashboardPage() {
     const employeeStats: Record<string, { name: string; working: number; leave: number }> = {};
 
     // 2. Department Line Data (For Multi Dept Manager - All Depts)
-    // Structure: { date: dateString, DeptA: count, DeptB: count, ... }
-    const deptDailyStats: Record<string, any> = {};
-    const allDeptNames = new Set<string>();
+    // Structure: { date: displayDate, DeptA: count, DeptB: count, ..., _sortKey: isoDate }
+    const statsByIsoDate: Record<string, any> = {};
 
     // 3. Employee Line Data (For Multi Dept Manager - Filtered Dept)
-    // Structure: { date: dateString, EmpA: count, EmpB: count, ... }
-    const empDailyStats: Record<string, any> = {};
+    // Structure: { date: displayDate, EmpA: count, EmpB: count, ..., _sortKey: isoDate }
+    const empStatsByIsoDate: Record<string, any> = {};
     const allEmpNames = new Set<string>();
 
+    // Single loop to calculate all stats efficiently
     filtered.forEach(report => {
-      // Bar Data Logic
+      // Bar Data Logic - Employee stats for single department view
       if (!employeeStats[report.employeeId]) {
         employeeStats[report.employeeId] = {
           name: report.name,
@@ -316,54 +316,27 @@ export default function ManagersDashboardPage() {
       if (report.status === 'working') employeeStats[report.employeeId].working++;
       if (report.status === 'leave') employeeStats[report.employeeId].leave++;
 
-      // Line Data Logic - Common Date Key
-      const dateKey = getShortDateIST(report.date);
+      // Line Data Logic - Use ISO date for proper sorting
+      const isoDate = report.date; // YYYY-MM-DD format
+      const displayDate = getShortDateIST(report.date);
 
-      // Dept Line Data
-      if (!deptDailyStats[dateKey]) deptDailyStats[dateKey] = { date: dateKey };
-      const deptKey = report.department;
-      deptDailyStats[dateKey][deptKey] = (deptDailyStats[dateKey][deptKey] || 0) + 1;
-      allDeptNames.add(deptKey);
+      // Department Line Data
+      if (!statsByIsoDate[isoDate]) {
+        statsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
+      }
+      statsByIsoDate[isoDate][report.department] = (statsByIsoDate[isoDate][report.department] || 0) + 1;
 
-      // Emp Line Data
-      if (!empDailyStats[dateKey]) empDailyStats[dateKey] = { date: dateKey };
-      const empKey = report.name;
-      empDailyStats[dateKey][empKey] = (empDailyStats[dateKey][empKey] || 0) + 1;
-      allEmpNames.add(empKey);
+      // Employee Line Data
+      if (!empStatsByIsoDate[isoDate]) {
+        empStatsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
+      }
+      empStatsByIsoDate[isoDate][report.name] = (empStatsByIsoDate[isoDate][report.name] || 0) + 1;
+      allEmpNames.add(report.name);
     });
 
     const employeeBarData = Object.values(employeeStats);
 
-    // Helper to sort by date
-    // We assume 'date' property "DD MMM" might not sort correctly lexicographically.
-    // Ideally we should use the original ISO date for sorting, but for now we try to rely on simple sort
-    // or we can just rely on the order they come in if we iterate chronologically. 
-    // Reports are not guaranteed sorted.
-    // Let's rely on the fact that for correct line chart x-axis, consistent sorting is needed.
-    // Reconstructing using a proper date compare would be safer if we can parse "DD MMM" back or just store timestamp.
-    // Actually, `deptDailyStats` keys are "DD MMM". Sorting these strings works for same-month-single-digit days issues? 
-    // "01 Jan" vs "02 Jan" works. "28 Feb" vs "01 Mar"? 
-    // "01 Mar" < "28 Feb" (lexicographically) -> INCORRECT.
-    // Simple fix: We don't have year/month easily available as keys here.
-    // BETTER approach: Use YYYY-MM-DD as key for stats object, then map to display format in the final array.
-
-    const statsByIsoDate: Record<string, any> = {};
-    const empStatsByIsoDate: Record<string, any> = {};
-
-    filtered.forEach(report => {
-      // Redoing the loop slightly safely for sorting
-      const isoDate = report.date; // YYYY-MM-DD
-      const displayDate = getShortDateIST(report.date);
-
-      // Dept
-      if (!statsByIsoDate[isoDate]) statsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
-      statsByIsoDate[isoDate][report.department] = (statsByIsoDate[isoDate][report.department] || 0) + 1;
-
-      // Emp
-      if (!empStatsByIsoDate[isoDate]) empStatsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
-      empStatsByIsoDate[isoDate][report.name] = (empStatsByIsoDate[isoDate][report.name] || 0) + 1;
-    });
-
+    // Sort line data by ISO date for correct chronological order
     const departmentLineData = Object.values(statsByIsoDate)
       .sort((a: any, b: any) => a._sortKey.localeCompare(b._sortKey));
 
@@ -374,7 +347,6 @@ export default function ManagersDashboardPage() {
       employeeBarData,
       departmentLineData,
       employeeLineData,
-      allDeptNames: Array.from(allDeptNames),
       allEmpNames: Array.from(allEmpNames)
     };
   }, [reports, searchTerm, statusFilter, selectedDepartment]);
@@ -899,8 +871,14 @@ export default function ManagersDashboardPage() {
                             : "Employee Trends (Filtered)"}
                       </h4>
                       <div className="h-[250px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          {managerDepartments.length === 1 ? (
+                        {managerDepartments.length === 1 ? (
+                          <ChartContainer
+                            config={{
+                              working: { label: "Working", color: "#22c55e" },
+                              leave: { label: "Leave", color: "#f59e0b" },
+                            }}
+                            className="h-full w-full !aspect-auto"
+                          >
                             <BarChart data={chartData.employeeBarData}>
                               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                               <XAxis dataKey="name" fontSize={12} interval={0} angle={-45} textAnchor="end" height={60} />
@@ -910,7 +888,20 @@ export default function ManagersDashboardPage() {
                               <Bar dataKey="working" name="Working" fill="#22c55e" radius={[4, 4, 0, 0]} />
                               <Bar dataKey="leave" name="Leave" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                             </BarChart>
-                          ) : selectedDepartment === 'all' ? (
+                          </ChartContainer>
+                        ) : selectedDepartment === 'all' ? (
+                          <ChartContainer
+                            config={Object.fromEntries(
+                              managerDepartments.map((dept, index) => [
+                                dept.name,
+                                {
+                                  label: dept.name,
+                                  color: ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'][index % 5],
+                                },
+                              ])
+                            )}
+                            className="h-full w-full !aspect-auto"
+                          >
                             <LineChart data={chartData.departmentLineData}>
                               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                               <XAxis dataKey="date" fontSize={12} />
@@ -928,7 +919,20 @@ export default function ManagersDashboardPage() {
                                 />
                               ))}
                             </LineChart>
-                          ) : (
+                          </ChartContainer>
+                        ) : (
+                          <ChartContainer
+                            config={Object.fromEntries(
+                              chartData.allEmpNames.map((empName, index) => [
+                                empName,
+                                {
+                                  label: empName,
+                                  color: ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444'][index % 6],
+                                },
+                              ])
+                            )}
+                            className="h-full w-full !aspect-auto"
+                          >
                             <LineChart data={chartData.employeeLineData}>
                               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                               <XAxis dataKey="date" fontSize={12} />
@@ -947,8 +951,8 @@ export default function ManagersDashboardPage() {
                                 />
                               ))}
                             </LineChart>
-                          )}
-                        </ResponsiveContainer>
+                          </ChartContainer>
+                        )}
                       </div>
                     </div>
                   </div>
