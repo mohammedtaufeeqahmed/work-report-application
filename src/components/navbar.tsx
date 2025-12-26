@@ -95,24 +95,27 @@ export function Navbar() {
   type NavLink = {
     href: string;
     label: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: typeof Home;
     requireAuth?: boolean;
     accessKey: keyof PageAccess;
     requireDepartment?: string;
   };
 
-  const navLinks: NavLink[] = [
-    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' },
-    { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' },
+  const allNavLinks: NavLink[] = [
+    { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' as keyof PageAccess },
+    { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' as keyof PageAccess },
     // Mark Attendance for Operations users with permission
-    { href: '/mark-attendance', label: 'Mark Attendance', icon: UserCheck, requireAuth: true, accessKey: 'mark_attendance', requireDepartment: 'Operations' },
-  ].filter(link => {
+    { href: '/mark-attendance', label: 'Mark Attendance', icon: UserCheck, requireAuth: true, accessKey: 'mark_attendance' as keyof PageAccess, requireDepartment: 'Operations' },
+  ];
+
+  const navLinks = allNavLinks.filter(link => {
     if (!user) return !link.requireAuth;
     // Check department requirement if specified
     if (link.requireDepartment && user.department !== link.requireDepartment) {
       return false;
     }
-    return pageAccess?.[link.accessKey] === true;
+    const key = link.accessKey;
+    return pageAccess?.[key] === true;
   });
 
   // View Reports link - based on pageAccess

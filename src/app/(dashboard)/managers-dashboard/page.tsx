@@ -324,13 +324,15 @@ export default function ManagersDashboardPage() {
       if (!statsByIsoDate[isoDate]) {
         statsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
       }
-      statsByIsoDate[isoDate][report.department] = (statsByIsoDate[isoDate][report.department] || 0) + 1;
+      const deptValue = statsByIsoDate[isoDate][report.department];
+      statsByIsoDate[isoDate][report.department] = (typeof deptValue === 'number' ? deptValue : 0) + 1;
 
       // Employee Line Data
       if (!empStatsByIsoDate[isoDate]) {
         empStatsByIsoDate[isoDate] = { date: displayDate, _sortKey: isoDate };
       }
-      empStatsByIsoDate[isoDate][report.name] = (empStatsByIsoDate[isoDate][report.name] || 0) + 1;
+      const empValue = empStatsByIsoDate[isoDate][report.name];
+      empStatsByIsoDate[isoDate][report.name] = (typeof empValue === 'number' ? empValue : 0) + 1;
       allEmpNames.add(report.name);
     });
 
