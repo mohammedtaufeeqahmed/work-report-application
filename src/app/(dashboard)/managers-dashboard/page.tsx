@@ -141,6 +141,24 @@ export default function ManagersDashboardPage() {
     }
   };
 
+  const fetchReportStatuses = async () => {
+    if (teamEmployees.length === 0 || !absentDate) return;
+    
+    setLoadingStatuses(true);
+    try {
+      const employeeIds = teamEmployees.map(emp => emp.employeeId).join(',');
+      const response = await fetch(`/api/work-reports/status?employeeIds=${encodeURIComponent(employeeIds)}&date=${absentDate}`);
+      const data = await response.json();
+      if (data.success) {
+        setReportStatuses(data.data || {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch report statuses:', error);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  };
+
   const handleMarkAbsent = async (employeeId: string) => {
     if (!absentDate) {
       toast.error('Please select a date');
@@ -160,6 +178,8 @@ export default function ManagersDashboardPage() {
         const employee = teamEmployees.find(emp => emp.employeeId === employeeId);
         toast.success(`${employee?.name || 'Employee'} marked as absent (leave) for ${getFullDateIST(absentDate)}`);
         setRecentlyMarked(prev => new Set(prev).add(employeeId));
+        // Refresh report statuses
+        await fetchReportStatuses();
         setTimeout(() => {
           setRecentlyMarked(prev => {
             const newSet = new Set(prev);
@@ -174,6 +194,46 @@ export default function ManagersDashboardPage() {
     } catch (error) {
       console.error('Failed to mark absent:', error);
       toast.error('Failed to mark employee as absent');
+    } finally {
+      setMarkingAbsent(null);
+    }
+  };
+
+  const handleMarkPresent = async (employeeId: string) => {
+    if (!absentDate) {
+      toast.error('Please select a date');
+      return;
+    }
+
+    setMarkingAbsent(employeeId);
+    try {
+      const response = await fetch('/api/work-reports/mark-present', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, date: absentDate }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const employee = teamEmployees.find(emp => emp.employeeId === employeeId);
+        toast.success(`${employee?.name || 'Employee'} marked as present (working) for ${getFullDateIST(absentDate)}`);
+        setRecentlyMarked(prev => new Set(prev).add(employeeId));
+        // Refresh report statuses
+        await fetchReportStatuses();
+        setTimeout(() => {
+          setRecentlyMarked(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(employeeId);
+            return newSet;
+          });
+        }, 3000);
+        fetchReports(); // Refresh reports
+      } else {
+        toast.error(data.error || 'Failed to mark employee as present');
+      }
+    } catch (error) {
+      console.error('Failed to mark present:', error);
+      toast.error('Failed to mark employee as present');
     } finally {
       setMarkingAbsent(null);
     }
