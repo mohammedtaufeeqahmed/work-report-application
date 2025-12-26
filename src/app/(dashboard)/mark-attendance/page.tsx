@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Search, Users, Calendar, Filter, UserX, CheckCircle2, Building2, ChevronDown } from 'lucide-react';
+import { Loader2, Search, Users, Calendar, Filter, UserX, CheckCircle2, Building2, ChevronDown, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SafeEmployee, SessionUser } from '@/types';
 import { getISTTodayDateString, getFullDateIST } from '@/lib/date';
@@ -20,6 +20,8 @@ export default function MarkAttendancePage() {
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [recentlyMarked, setRecentlyMarked] = useState<Set<string>>(new Set());
+  const [reportStatuses, setReportStatuses] = useState<Record<string, { status: string | null; exists: boolean }>>({});
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
 
   useEffect(() => {
     fetchSession();
@@ -30,6 +32,12 @@ export default function MarkAttendancePage() {
       fetchTeamEmployees();
     }
   }, [session]);
+
+  useEffect(() => {
+    if (teamEmployees.length > 0 && absentDate) {
+      fetchReportStatuses();
+    }
+  }, [teamEmployees, absentDate]);
 
   const fetchSession = async () => {
     try {
@@ -70,6 +78,24 @@ export default function MarkAttendancePage() {
     }
   };
 
+  const fetchReportStatuses = async () => {
+    if (teamEmployees.length === 0 || !absentDate) return;
+    
+    setLoadingStatuses(true);
+    try {
+      const employeeIds = teamEmployees.map(emp => emp.employeeId).join(',');
+      const response = await fetch(`/api/work-reports/status?employeeIds=${encodeURIComponent(employeeIds)}&date=${absentDate}`);
+      const data = await response.json();
+      if (data.success) {
+        setReportStatuses(data.data || {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch report statuses:', error);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  };
+
   const handleMarkAbsent = async (employeeId: string) => {
     if (!absentDate) {
       toast.error('Please select a date');
@@ -89,6 +115,8 @@ export default function MarkAttendancePage() {
         const employee = teamEmployees.find(emp => emp.employeeId === employeeId);
         toast.success(`${employee?.name || 'Employee'} marked as absent (leave) for ${getFullDateIST(absentDate)}`);
         setRecentlyMarked(prev => new Set(prev).add(employeeId));
+        // Refresh report statuses
+        await fetchReportStatuses();
         setTimeout(() => {
           setRecentlyMarked(prev => {
             const newSet = new Set(prev);
@@ -102,6 +130,45 @@ export default function MarkAttendancePage() {
     } catch (error) {
       console.error('Failed to mark absent:', error);
       toast.error('Failed to mark employee as absent');
+    } finally {
+      setMarkingAbsent(null);
+    }
+  };
+
+  const handleMarkPresent = async (employeeId: string) => {
+    if (!absentDate) {
+      toast.error('Please select a date');
+      return;
+    }
+
+    setMarkingAbsent(employeeId);
+    try {
+      const response = await fetch('/api/work-reports/mark-present', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, date: absentDate }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const employee = teamEmployees.find(emp => emp.employeeId === employeeId);
+        toast.success(`${employee?.name || 'Employee'} marked as present (working) for ${getFullDateIST(absentDate)}`);
+        setRecentlyMarked(prev => new Set(prev).add(employeeId));
+        // Refresh report statuses
+        await fetchReportStatuses();
+        setTimeout(() => {
+          setRecentlyMarked(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(employeeId);
+            return newSet;
+          });
+        }, 3000);
+      } else {
+        toast.error(data.error || 'Failed to mark employee as present');
+      }
+    } catch (error) {
+      console.error('Failed to mark present:', error);
+      toast.error('Failed to mark employee as present');
     } finally {
       setMarkingAbsent(null);
     }
@@ -250,6 +317,9 @@ export default function MarkAttendancePage() {
                   {filteredEmployees.map((employee) => {
                     const isMarking = markingAbsent === employee.employeeId;
                     const wasRecentlyMarked = recentlyMarked.has(employee.employeeId);
+                    const reportStatus = reportStatuses[employee.employeeId];
+                    const isMarkedAbsentByManager = reportStatus?.status === 'leave';
+                    const isMarkedPresent = reportStatus?.status === 'working';
                     
                     return (
                       <div
@@ -271,31 +341,60 @@ export default function MarkAttendancePage() {
                           <div className="flex items-center gap-2 mt-1">
                             <Building2 className="h-3 w-3 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">{employee.department}</span>
+                            {isMarkedAbsentByManager && (
+                              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">(Manager marked absent)</span>
+                            )}
+                            {isMarkedPresent && (
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">(Present)</span>
+                            )}
                           </div>
                         </div>
-                        <Button
-                          onClick={() => handleMarkAbsent(employee.employeeId)}
-                          disabled={isMarking || !absentDate}
-                          variant={wasRecentlyMarked ? "outline" : "default"}
-                          className="gap-2"
-                        >
-                          {isMarking ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Marking...
-                            </>
-                          ) : wasRecentlyMarked ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                              Marked
-                            </>
-                          ) : (
-                            <>
-                              <UserX className="h-4 w-4" />
-                              Mark Absent
-                            </>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleMarkAbsent(employee.employeeId)}
+                            disabled={isMarking || !absentDate || isMarkedAbsentByManager}
+                            variant={wasRecentlyMarked && !isMarkedPresent ? "outline" : "default"}
+                            className="gap-2"
+                            title={isMarkedAbsentByManager ? "Manager has already marked this employee as absent" : ""}
+                          >
+                            {isMarking ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Marking...
+                              </>
+                            ) : wasRecentlyMarked && !isMarkedPresent ? (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                Marked
+                              </>
+                            ) : (
+                              <>
+                                <UserX className="h-4 w-4" />
+                                Mark Absent
+                              </>
+                            )}
+                          </Button>
+                          {(isMarkedAbsentByManager || isMarkedPresent) && (
+                            <Button
+                              onClick={() => handleMarkPresent(employee.employeeId)}
+                              disabled={isMarking || !absentDate}
+                              variant="outline"
+                              className="gap-2"
+                            >
+                              {isMarking ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Marking...
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4" />
+                                  Mark Present
+                                </>
+                              )}
+                            </Button>
                           )}
-                        </Button>
+                        </div>
                       </div>
                     );
                   })}

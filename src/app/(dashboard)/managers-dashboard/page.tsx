@@ -23,6 +23,8 @@ export default function ManagersDashboardPage() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'leave'>('all');
   const [recentlyMarked, setRecentlyMarked] = useState<Set<string>>(new Set());
+  const [reportStatuses, setReportStatuses] = useState<Record<string, { status: string | null; exists: boolean }>>({});
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
   const [managerDepartments, setManagerDepartments] = useState<Department[]>([]);
   const [departmentColors, setDepartmentColors] = useState<Map<string, { solid: string; gradient: string; border: string; text: string }>>(new Map());
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
@@ -75,6 +77,12 @@ export default function ManagersDashboardPage() {
       fetchTeamEmployees();
     }
   }, [dialogOpen]);
+
+  useEffect(() => {
+    if (teamEmployees.length > 0 && absentDate && dialogOpen) {
+      fetchReportStatuses();
+    }
+  }, [teamEmployees, absentDate, dialogOpen]);
 
   const fetchSession = async () => {
     try {
@@ -467,6 +475,9 @@ export default function ManagersDashboardPage() {
                       {filteredEmployees.map((employee) => {
                         const isMarking = markingAbsent === employee.employeeId;
                         const isRecentlyMarked = recentlyMarked.has(employee.employeeId);
+                        const reportStatus = reportStatuses[employee.employeeId];
+                        const isMarkedAbsentByOperations = reportStatus?.status === 'leave';
+                        const isMarkedPresent = reportStatus?.status === 'working';
                         return (
                           <div
                             key={employee.employeeId}
@@ -509,38 +520,72 @@ export default function ManagersDashboardPage() {
                                         <Building2 className="h-3 w-3" />
                                         {employee.department}
                                       </span>
+                                      {isMarkedAbsentByOperations && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 font-medium">
+                                          Operations marked absent
+                                        </span>
+                                      )}
+                                      {isMarkedPresent && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium">
+                                          Present
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
                                 
-                                {/* Action Button */}
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleMarkAbsent(employee.employeeId)}
-                                  disabled={isMarking || !absentDate}
-                                  className={`flex-shrink-0 gap-2 transition-all ${
-                                    isRecentlyMarked
-                                      ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
-                                      : 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70'
-                                  }`}
-                                >
-                                  {isMarking ? (
-                                    <>
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      <span>Marking...</span>
-                                    </>
-                                  ) : isRecentlyMarked ? (
-                                    <>
-                                      <CheckCircle2 className="h-3.5 w-3.5" />
-                                      <span>Marked</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <UserCheck className="h-3.5 w-3.5" />
-                                      <span>Mark Absent</span>
-                                    </>
+                                {/* Action Buttons */}
+                                <div className="flex gap-2 flex-shrink-0">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleMarkAbsent(employee.employeeId)}
+                                    disabled={isMarking || !absentDate || isMarkedAbsentByOperations}
+                                    className={`gap-2 transition-all ${
+                                      isRecentlyMarked && !isMarkedPresent
+                                        ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white'
+                                        : 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70'
+                                    }`}
+                                    title={isMarkedAbsentByOperations ? "Operations has already marked this employee as absent" : ""}
+                                  >
+                                    {isMarking ? (
+                                      <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <span>Marking...</span>
+                                      </>
+                                    ) : isRecentlyMarked && !isMarkedPresent ? (
+                                      <>
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        <span>Marked</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <UserCheck className="h-3.5 w-3.5" />
+                                        <span>Mark Absent</span>
+                                      </>
+                                    )}
+                                  </Button>
+                                  {(isMarkedAbsentByOperations || isMarkedPresent) && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleMarkPresent(employee.employeeId)}
+                                      disabled={isMarking || !absentDate}
+                                      variant="outline"
+                                      className="gap-2"
+                                    >
+                                      {isMarking ? (
+                                        <>
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          <span>Marking...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <UserCheck className="h-3.5 w-3.5" />
+                                          <span>Mark Present</span>
+                                        </>
+                                      )}
+                                    </Button>
                                   )}
-                                </Button>
+                                </div>
                               </div>
                             </div>
                           </div>

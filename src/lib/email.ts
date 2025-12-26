@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logger } from './logger';
 
 // Email configuration
 const getTransporter = () => {
@@ -11,7 +12,7 @@ const getTransporter = () => {
   const pass = process.env.SMTP_PASS;
   
   if (!user || !pass) {
-    console.warn('[Email] SMTP credentials not configured. Emails will be logged to console.');
+    logger.warn('[Email] SMTP credentials not configured. Emails will be logged to console.');
     return null;
   }
   
@@ -49,17 +50,17 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   const transporter = getTransporter();
   
   if (!transporter) {
-    // Log email content when SMTP is not configured
-    console.log('\n========== EMAIL (Not Sent - SMTP Not Configured) ==========');
-    console.log(`To: ${to}`);
-    console.log(`From: ${from}`);
-    console.log(`Reply-To: ${replyTo}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: ${text}`);
+    // Log email content when SMTP is not configured (development only)
+    logger.debug('\n========== EMAIL (Not Sent - SMTP Not Configured) ==========');
+    logger.debug(`To: ${to}`);
+    logger.debug(`From: ${from}`);
+    logger.debug(`Reply-To: ${replyTo}`);
+    logger.debug(`Subject: ${subject}`);
+    logger.debug(`Body: ${text}`);
     if (html) {
-      console.log(`HTML: ${html.substring(0, 200)}...`);
+      logger.debug(`HTML: ${html.substring(0, 200)}...`);
     }
-    console.log('=============================================================\n');
+    logger.debug('=============================================================\n');
     // Return false in production, true only in development
     return process.env.NODE_ENV === 'development';
   }
@@ -77,7 +78,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
         'Precedence': 'bulk',  // Indicates automated email
       },
     });
-    console.log(`[Email] Sent to ${to}: ${subject}`);
+    logger.debug(`[Email] Sent to ${to}: ${subject}`);
     return true;
   } catch (error) {
     console.error('[Email] Failed to send:', error);

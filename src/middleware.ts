@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { logger } from '@/lib/logger';
 import type { PageAccess, UserRole } from '@/types';
 
 // Routes that require authentication
@@ -193,10 +194,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     // Log error for debugging (without exposing sensitive info)
-    if (process.env.NODE_ENV === 'development') {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn('[MIDDLEWARE] Token verification failed:', errorMsg);
-    }
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    logger.warn('[MIDDLEWARE] Token verification failed:', errorMsg);
     // Invalid token, redirect to login
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);

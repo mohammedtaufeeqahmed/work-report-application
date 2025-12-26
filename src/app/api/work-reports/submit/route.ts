@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueWorkReport, getQueueItemStatus } from '@/lib/queue/work-report-queue';
-import { getWorkReportByEmployeeAndDate } from '@/lib/db/queries';
+import { getWorkReportByEmployeeAndDate, updateWorkReport } from '@/lib/db/queries';
+import { getSession } from '@/lib/auth';
 import type { ApiResponse, CreateWorkReportInput } from '@/types';
 
 // POST: Submit a work report via queue (for concurrent submissions)
@@ -36,6 +37,35 @@ export async function POST(request: NextRequest) {
     // Check if employee already submitted a report for this date
     const existingReport = await getWorkReportByEmployeeAndDate(employeeId, date);
     if (existingReport) {
+      // If report exists, check if employee is trying to add their work report to a manager-marked report
+      const session = await getSession();
+      const isOwnReport = session && session.employeeId === employeeId;
+      const hasNoWorkReport = !existingReport.workReport || existingReport.workReport.trim() === '';
+      
+      // Allow employee to update their own report if it has no work report (manager marked as working)
+      if (isOwnReport && hasNoWorkReport && status === 'working' && workReport && workReport.trim()) {
+        // Update the existing report with the work report
+        const updatedReport = await updateWorkReport(
+          existingReport.id,
+          existingReport.status, // Keep existing status
+          workReport.trim(),
+          existingReport.onDuty // Keep existing onDuty
+        );
+        
+        if (updatedReport) {
+          // Return in the same format as queue response for consistency
+          return NextResponse.json<ApiResponse<{ queueId: string; report: typeof updatedReport }>>({
+            success: true,
+            data: { 
+              queueId: `update-${existingReport.id}-${Date.now()}`, // Fake queue ID for consistency
+              report: updatedReport 
+            },
+            message: 'Work report updated successfully',
+          });
+        }
+      }
+      
+      // Otherwise, reject duplicate submission
       return NextResponse.json<ApiResponse>(
         { success: false, error: 'You have already submitted a work report for today' },
         { status: 409 } // 409 Conflict

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { logger } from '../logger';
 import type { CreateWorkReportInput, WorkReport } from '@/types';
 
 // Queue item type
@@ -74,7 +75,7 @@ async function executeWithRetry<T>(
       if (isTransientError && attempt < maxRetries - 1) {
         // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
         const delay = baseDelayMs * Math.pow(2, attempt);
-        console.log(`[Queue] Transient error detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+        logger.debug(`[Queue] Transient error detected, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -99,7 +100,7 @@ class WorkReportQueue extends EventEmitter {
   constructor() {
     super();
     this.setMaxListeners(QUEUE_CONFIG.MAX_LISTENERS);
-    console.log('[Queue] WorkReportQueue initialized with optimized settings for concurrent access');
+    logger.log('[Queue] WorkReportQueue initialized with optimized settings for concurrent access');
   }
 
   // Generate unique ID
@@ -120,7 +121,7 @@ class WorkReportQueue extends EventEmitter {
     };
 
     this.queue.push(item);
-    console.log(`[Queue] Enqueued item ${id}. Queue size: ${this.queue.length}`);
+    logger.debug(`[Queue] Enqueued item ${id}. Queue size: ${this.queue.length}`);
     
     // Emit event for new item
     this.emit('enqueue', item);
@@ -146,7 +147,7 @@ class WorkReportQueue extends EventEmitter {
     this.processing = true;
     item.status = 'processing';
     item.processingStartTime = Date.now();
-    console.log(`[Queue] Processing item ${item.id} (queue size: ${this.queue.length})`);
+    logger.debug(`[Queue] Processing item ${item.id} (queue size: ${this.queue.length})`);
 
     try {
       // Import dynamically to avoid circular dependencies
@@ -176,7 +177,7 @@ class WorkReportQueue extends EventEmitter {
         this.processingTimes.shift();
       }
       
-      console.log(`[Queue] Item ${item.id} completed in ${processingTime}ms`);
+      logger.debug(`[Queue] Item ${item.id} completed in ${processingTime}ms`);
       
       // Move to completed list
       this.queue = this.queue.filter(i => i.id !== item.id);
@@ -220,7 +221,7 @@ class WorkReportQueue extends EventEmitter {
         this.emit('failed', item);
       } else {
         item.status = 'pending';
-        console.log(`[Queue] Item ${item.id} will be retried (attempt ${item.retries}/${QUEUE_CONFIG.MAX_RETRIES})`);
+        logger.debug(`[Queue] Item ${item.id} will be retried (attempt ${item.retries}/${QUEUE_CONFIG.MAX_RETRIES})`);
       }
     } finally {
       this.processing = false;
@@ -238,7 +239,7 @@ class WorkReportQueue extends EventEmitter {
     try {
       const { appendToGoogleSheet } = await import('@/lib/google-sheets');
       await appendToGoogleSheet(report);
-      console.log(`[Queue] Work report backed up to Google Sheets: ${report.id}`);
+      logger.debug(`[Queue] Work report backed up to Google Sheets: ${report.id}`);
     } catch (error) {
       // Log but don't throw - Google Sheets is backup only
       console.error('[Queue] Google Sheets backup error:', error);
@@ -281,7 +282,7 @@ class WorkReportQueue extends EventEmitter {
     this.completedItems = [];
     this.failedItems = [];
     this.processingTimes = [];
-    console.log(`[Queue] Cleared ${clearedCount} items from history`);
+    logger.debug(`[Queue] Cleared ${clearedCount} items from history`);
   }
 
   // Get all items (for debugging)

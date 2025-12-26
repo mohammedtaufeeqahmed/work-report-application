@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { pool } from '@/lib/db/database';
+import { logger } from '@/lib/logger';
 
-// Temporary reset key - remove after use
-const RESET_KEY = 'RESET_ALL_DATA_2024';
+// Reset key from environment variable (for production safety)
+const RESET_KEY = process.env.DB_RESET_KEY;
 
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const resetKey = searchParams.get('key');
     
-    // Allow reset with either valid session or reset key
+    // Only allow superadmin to reset database (reset key disabled in production)
     const session = await getSession();
-    const hasValidKey = resetKey === RESET_KEY;
+    const hasValidKey = RESET_KEY && resetKey === RESET_KEY;
     
     if (!hasValidKey && (!session || session.role !== 'superadmin')) {
       return NextResponse.json(
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       message: 'Database reset successfully. All data deleted except super admin.',
     });
   } catch (error) {
-    console.error('Database reset error:', error);
+    logger.error('Database reset error:', error);
     return NextResponse.json(
       {
         success: false,

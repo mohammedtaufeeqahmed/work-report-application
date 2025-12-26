@@ -588,6 +588,37 @@ export async function getWorkReportByEmployeeAndDate(employeeId: string, date: s
 }
 
 /**
+ * Get work reports for multiple employees for a specific date
+ * Returns a map of employeeId -> WorkReport
+ */
+export async function getWorkReportsByEmployeeIdsAndDate(
+  employeeIds: string[],
+  date: string
+): Promise<Record<string, WorkReport>> {
+  if (employeeIds.length === 0) {
+    return {};
+  }
+  
+  const results = await db
+    .select()
+    .from(workReports)
+    .where(
+      and(
+        inArray(workReports.employeeId, employeeIds),
+        eq(workReports.date, date)
+      )
+    );
+  
+  const reportMap: Record<string, WorkReport> = {};
+  results.forEach(result => {
+    const report = toWorkReport(result);
+    reportMap[report.employeeId] = report;
+  });
+  
+  return reportMap;
+}
+
+/**
  * Create a new work report
  */
 export async function createWorkReport(input: CreateWorkReportInput): Promise<WorkReport> {
@@ -632,7 +663,7 @@ export async function getWorkReportCount(): Promise<number> {
 }
 
 /**
- * Search work reports by department, name, or employeeId
+ * Search work reports by department, name, or employeeId (case-insensitive)
  */
 export async function searchWorkReports(searchQuery: string, filterDepartment?: string): Promise<WorkReport[]> {
   const searchPattern = `%${searchQuery}%`;
@@ -644,7 +675,10 @@ export async function searchWorkReports(searchQuery: string, filterDepartment?: 
       .where(
         and(
           eq(workReports.department, filterDepartment),
-          or(like(workReports.employeeId, searchPattern), like(workReports.name, searchPattern))
+          or(
+            sql`UPPER(${workReports.employeeId}) LIKE UPPER(${searchPattern})`,
+            sql`UPPER(${workReports.name}) LIKE UPPER(${searchPattern})`
+          )
         )
       )
       .orderBy(desc(workReports.date), desc(workReports.createdAt));
@@ -656,9 +690,9 @@ export async function searchWorkReports(searchQuery: string, filterDepartment?: 
     .from(workReports)
     .where(
       or(
-        like(workReports.employeeId, searchPattern),
-        like(workReports.name, searchPattern),
-        like(workReports.department, searchPattern)
+        sql`UPPER(${workReports.employeeId}) LIKE UPPER(${searchPattern})`,
+        sql`UPPER(${workReports.name}) LIKE UPPER(${searchPattern})`,
+        sql`UPPER(${workReports.department}) LIKE UPPER(${searchPattern})`
       )
     )
     .orderBy(desc(workReports.date), desc(workReports.createdAt));
@@ -715,7 +749,7 @@ export async function getUniqueWorkReportDepartmentsForManager(managerId: number
 }
 
 /**
- * Search work reports filtered by manager's departments
+ * Search work reports filtered by manager's departments (case-insensitive)
  */
 export async function searchWorkReportsForManager(
   searchQuery: string,
@@ -744,7 +778,10 @@ export async function searchWorkReportsForManager(
       .where(
         and(
           eq(workReports.department, filterDepartment),
-          or(like(workReports.employeeId, searchPattern), like(workReports.name, searchPattern))
+          or(
+            sql`UPPER(${workReports.employeeId}) LIKE UPPER(${searchPattern})`,
+            sql`UPPER(${workReports.name}) LIKE UPPER(${searchPattern})`
+          )
         )
       )
       .orderBy(desc(workReports.date), desc(workReports.createdAt));
@@ -758,9 +795,9 @@ export async function searchWorkReportsForManager(
       and(
         inArray(workReports.department, allowedDepts),
         or(
-          like(workReports.employeeId, searchPattern),
-          like(workReports.name, searchPattern),
-          like(workReports.department, searchPattern)
+          sql`UPPER(${workReports.employeeId}) LIKE UPPER(${searchPattern})`,
+          sql`UPPER(${workReports.name}) LIKE UPPER(${searchPattern})`,
+          sql`UPPER(${workReports.department}) LIKE UPPER(${searchPattern})`
         )
       )
     )

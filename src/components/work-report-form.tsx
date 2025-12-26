@@ -202,6 +202,16 @@ export function WorkReportForm() {
       const data = await response.json();
 
       if (data.success) {
+        // Check if this is a direct update (report already exists, employee adding work report)
+        if (data.data.report) {
+          // Direct update - no queue involved
+          setSubmitted(true);
+          toast.success('Work report updated successfully!');
+          setSubmitting(false);
+          return;
+        }
+        
+        // Normal submission - use queue
         const queueId = data.data.queueId;
         
         let attempts = 0;

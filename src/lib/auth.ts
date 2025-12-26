@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { getEmployeeByEmployeeId, updateEmployeePassword } from './db/queries';
+import { logger } from './logger';
 import type { Employee, SessionUser, LoginCredentials, PageAccess } from '@/types';
 import { DEFAULT_PAGE_ACCESS } from '@/types';
 
@@ -19,7 +20,7 @@ function getJwtSecret(): Uint8Array {
       console.error('[AUTH ERROR]', errorMsg);
       throw new Error(errorMsg);
     } else {
-      console.warn('[AUTH WARNING]', errorMsg, '- Using fallback secret for development');
+      logger.warn('[AUTH WARNING]', errorMsg, '- Using fallback secret for development');
       // Use a fallback in development only
       return new TextEncoder().encode('fallback-secret-for-development-only');
     }
@@ -90,10 +91,8 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
       pageAccess: payload.pageAccess as PageAccess | null,
     };
   } catch (error) {
-    // Log error in development for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[AUTH] Token verification failed:', error instanceof Error ? error.message : 'Unknown error');
-    }
+    // Log error for debugging
+    logger.warn('[AUTH] Token verification failed:', error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
@@ -166,14 +165,12 @@ export async function setSessionCookie(user: SessionUser): Promise<void> {
     cookieStore.set(SESSION_COOKIE_NAME, token, cookieOptions);
 
     // Log in development for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[AUTH] Session cookie set:', {
-        secure: isSecure,
-        sameSite,
-        domain: cookieDomain || 'default',
-        expires: expiresAt.toISOString(),
-      });
-    }
+    logger.debug('[AUTH] Session cookie set:', {
+      secure: isSecure,
+      sameSite,
+      domain: cookieDomain || 'default',
+      expires: expiresAt.toISOString(),
+    });
   } catch (error) {
     console.error('[AUTH ERROR] Failed to set session cookie:', error);
     // Re-throw to allow caller to handle

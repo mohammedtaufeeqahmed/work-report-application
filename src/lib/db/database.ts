@@ -4,7 +4,8 @@ import { logger } from '../logger';
 import * as schema from './schema';
 
 // Get database URL from environment
-// Default uses the Coolify PostgreSQL with developmentTeam user
+// WARNING: Default connection string is for development only
+// In production, always set DATABASE_URL environment variable
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport';
 
 // Create connection pool with optimized settings for 40-50 concurrent users

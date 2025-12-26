@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWorkReportById, updateWorkReport, getEditPermissions } from '@/lib/db/queries';
+import { getWorkReportById, updateWorkReport, getEditPermissions, getTeamEmployeesForManager } from '@/lib/db/queries';
 import { getSession } from '@/lib/auth';
 import type { ApiResponse, WorkReport, UpdateWorkReportInput } from '@/types';
 import { getISTTodayDateString, convertUTCToISTDate } from '@/lib/date';
@@ -117,7 +117,15 @@ export async function PUT(
       canEdit = isOwnReport && permissions.employee_can_edit_own_reports;
     } else if (session.role === 'manager') {
       // Managers can edit their own reports when employee_can_edit_own_reports is enabled
-      canEdit = isOwnReport && permissions.employee_can_edit_own_reports;
+      if (isOwnReport && permissions.employee_can_edit_own_reports) {
+        canEdit = true;
+      } else if (permissions.manager_can_edit_team_reports) {
+        // Managers can edit team members' reports if permission is enabled
+        // Check if the employee is in the manager's team
+        const teamEmployees = await getTeamEmployeesForManager(session.id);
+        const isTeamMember = teamEmployees.some(emp => emp.employeeId === report.employeeId);
+        canEdit = isTeamMember;
+      }
     }
 
     if (!canEdit) {
@@ -156,11 +164,29 @@ export async function PUT(
     // onDuty is only applicable when status is working
     const newOnDuty = newStatus === 'working' ? (onDuty !== undefined ? onDuty : report.onDuty) : false;
 
-    if (newStatus === 'working' && (!newWorkReport || newWorkReport.trim() === '')) {
-      return NextResponse.json<ApiResponse>(
-        { success: false, error: 'Work report is required when status is "working"' },
-        { status: 400 }
-      );
+    // Check if this is the employee editing their own report
+    const isOwnReport = report.employeeId === session.employeeId;
+    const isManagerEditingTeamMember = session.role === 'manager' && !isOwnReport;
+
+    // Work report is required when:
+    // 1. Employee is editing their own report and status is working
+    // 2. Anyone is editing and the report already has a work report (to prevent clearing it)
+    // Managers editing team members can set status to working without work report
+    if (newStatus === 'working') {
+      if (isOwnReport && (!newWorkReport || newWorkReport.trim() === '')) {
+        // Employee must provide work report for their own report
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: 'Work report is required when status is "working"' },
+          { status: 400 }
+        );
+      } else if (!isManagerEditingTeamMember && report.workReport && (!newWorkReport || newWorkReport.trim() === '')) {
+        // If report already has work report, don't allow clearing it (unless manager is marking as working)
+        return NextResponse.json<ApiResponse>(
+          { success: false, error: 'Work report cannot be cleared' },
+          { status: 400 }
+        );
+      }
+      // Managers can set status to working without work report - employee will add it later
     }
 
     // Update the report

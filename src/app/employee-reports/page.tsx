@@ -65,8 +65,16 @@ export default function EmployeeReportsPage() {
       hasPermission = editPermissions.admin_can_edit_reports;
     } else if (session.role === 'employee' && isOwnReport) {
       hasPermission = editPermissions.employee_can_edit_own_reports;
-    } else if (session.role === 'manager' && isOwnReport) {
-      hasPermission = editPermissions.employee_can_edit_own_reports;
+    } else if (session.role === 'manager') {
+      // Managers can edit their own reports when employee_can_edit_own_reports is enabled
+      if (isOwnReport && editPermissions.employee_can_edit_own_reports) {
+        hasPermission = true;
+      } else if (editPermissions.manager_can_edit_team_reports) {
+        // Managers can edit team members' reports if permission is enabled
+        // Check if the employee's department is in manager's assigned departments
+        const isTeamMember = managerDepartments.some(dept => dept.name === report.department);
+        hasPermission = isTeamMember;
+      }
     }
     
     if (!hasPermission) return false;
@@ -74,7 +82,7 @@ export default function EmployeeReportsPage() {
     const createdDate = convertUTCToISTDate(report.createdAt);
     const todayDate = getISTTodayDateString();
     return createdDate === todayDate;
-  }, [session, editPermissions]);
+  }, [session, editPermissions, managerDepartments]);
 
   const fetchReports = useCallback(async (query?: string, dept?: string, startDate?: string, endDate?: string) => {
     setLoading(true);
@@ -235,7 +243,14 @@ export default function EmployeeReportsPage() {
   const handleSaveEdit = useCallback(async () => {
     if (!editingReport) return;
 
-    if (editStatus === 'working' && !editWorkReport.trim()) {
+    // Check if this is the employee editing their own report
+    const isOwnReport = editingReport.employeeId === session?.employeeId;
+    const isManagerEditingTeamMember = session?.role === 'manager' && !isOwnReport;
+
+    // Work report is required only if:
+    // 1. Employee is editing their own report and status is working
+    // 2. Not a manager editing team member (managers can mark as working without work report)
+    if (editStatus === 'working' && !editWorkReport.trim() && !isManagerEditingTeamMember) {
       toast.error('Work report is required when status is "Working"');
       return;
     }
@@ -267,7 +282,7 @@ export default function EmployeeReportsPage() {
     } finally {
       setSaving(false);
     }
-  }, [editingReport, editStatus, editWorkReport, handleCancelEdit]);
+  }, [editingReport, editStatus, editWorkReport, handleCancelEdit, session]);
 
   const formatDate = useCallback((dateStr: string) => formatDateForDisplay(dateStr), []);
   const getShortDay = useCallback((dateStr: string) => getShortDayIST(dateStr), []);
@@ -490,13 +505,28 @@ export default function EmployeeReportsPage() {
                     
                     <div className="space-y-2">
                       <Label className="text-xs font-medium">
-                        Work Report {editStatus === 'working' && <span className="text-red-500">*</span>}
+                        Work Report {
+                          editStatus === 'working' && 
+                          editingReport.employeeId === session?.employeeId && 
+                          <span className="text-red-500">*</span>
+                        }
+                        {editStatus === 'working' && 
+                         editingReport.employeeId !== session?.employeeId && 
+                         session?.role === 'manager' && 
+                         <span className="text-xs text-muted-foreground ml-1">(Optional - Employee will add later)</span>
+                        }
                       </Label>
                       <textarea
                         value={editWorkReport}
                         onChange={(e) => setEditWorkReport(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
+                        placeholder={
+                          editStatus === 'working' 
+                            ? (editingReport.employeeId === session?.employeeId 
+                                ? 'Describe your work...' 
+                                : 'Employee will submit their work report...')
+                            : 'Optional notes...'
+                        }
                         className="flex min-h-24 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
                       />
                     </div>
@@ -1100,12 +1130,27 @@ export default function EmployeeReportsPage() {
 
                                       <div className="space-y-2">
                                     <Label className="text-xs font-medium">
-                                      Work Report {editStatus === 'working' && <span className="text-destructive">*</span>}
+                                      Work Report {
+                                        editStatus === 'working' && 
+                                        editingReport.employeeId === session?.employeeId && 
+                                        <span className="text-destructive">*</span>
+                                      }
+                                      {editStatus === 'working' && 
+                                       editingReport.employeeId !== session?.employeeId && 
+                                       session?.role === 'manager' && 
+                                       <span className="text-xs text-muted-foreground ml-1">(Optional - Employee will add later)</span>
+                                      }
                                     </Label>
                                     <textarea
                                       value={editWorkReport}
                                       onChange={(e) => setEditWorkReport(e.target.value)}
-                                          placeholder={editStatus === 'working' ? 'Describe your work...' : 'Optional notes...'}
+                                          placeholder={
+                                            editStatus === 'working' 
+                                              ? (editingReport.employeeId === session?.employeeId 
+                                                  ? 'Describe your work...' 
+                                                  : 'Employee will submit their work report...')
+                                              : 'Optional notes...'
+                                          }
                                           className="flex min-h-28 w-full max-w-2xl rounded-xl border border-input bg-background/50 px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none transition-all"
                                     />
                                   </div>

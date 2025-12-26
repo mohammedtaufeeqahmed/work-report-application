@@ -690,12 +690,15 @@ export default function AdminPage() {
 
   const markAbsentDepartments = Array.from(new Set(teamEmployees.map(emp => emp.department))).sort();
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+    if (searchTerm === '') return true;
+    return (
+      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.department.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   if (loading) {
     return (
