@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkReportById, updateWorkReport, getEditPermissions, getTeamEmployeesForManager } from '@/lib/db/queries';
 import { getSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import type { ApiResponse, WorkReport, UpdateWorkReportInput } from '@/types';
 import { getISTTodayDateString, convertUTCToISTDate } from '@/lib/date';
 
@@ -59,7 +60,7 @@ export async function GET(
       data: report,
     });
   } catch (error) {
-    console.error('Get work report error:', error);
+    logger.error('Get work report error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to fetch work report' },
       { status: 500 }
@@ -164,8 +165,7 @@ export async function PUT(
     // onDuty is only applicable when status is working
     const newOnDuty = newStatus === 'working' ? (onDuty !== undefined ? onDuty : report.onDuty) : false;
 
-    // Check if this is the employee editing their own report
-    const isOwnReport = report.employeeId === session.employeeId;
+    // Check if this is a manager editing a team member (isOwnReport already declared above)
     const isManagerEditingTeamMember = session.role === 'manager' && !isOwnReport;
 
     // Work report is required when:
@@ -205,7 +205,7 @@ export async function PUT(
       message: 'Work report updated successfully',
     });
   } catch (error) {
-    console.error('Update work report error:', error);
+    logger.error('Update work report error:', error);
     return NextResponse.json<ApiResponse>(
       { success: false, error: 'Failed to update work report' },
       { status: 500 }
