@@ -169,9 +169,30 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Fetch work reports error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const isConnectionError = 
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('Connection terminated') ||
+      errorMessage.includes('connection timeout') ||
+      errorMessage.includes('ENOTFOUND');
+    
+    logger.error('Fetch work reports error:', errorMessage);
+    console.error('[API] Work reports fetch error:', error);
+    console.error('[API] Error stack:', errorStack);
+    
+    // Include detailed error in development or if DEBUG env is set
+    const showDetailedError = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
+    
     return NextResponse.json<ApiResponse>(
-      { success: false, error: 'Failed to fetch work reports' },
+      { 
+        success: false, 
+        error: isConnectionError 
+          ? 'Database connection error. Please try again in a few moments.' 
+          : 'Failed to fetch work reports',
+        ...(showDetailedError && { details: errorMessage })
+      },
       { status: 500 }
     );
   }
@@ -233,9 +254,24 @@ export async function POST(request: NextRequest) {
       message: 'Work report submitted successfully',
     }, { status: 201 });
   } catch (error) {
-    logger.error('Submit work report error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isConnectionError = 
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('Connection terminated') ||
+      errorMessage.includes('connection timeout') ||
+      errorMessage.includes('ENOTFOUND');
+    
+    logger.error('Submit work report error:', errorMessage);
+    console.error('[API] Work report submit error:', error);
+    
     return NextResponse.json<ApiResponse>(
-      { success: false, error: 'Failed to submit work report' },
+      { 
+        success: false, 
+        error: isConnectionError 
+          ? 'Database connection error. Please try again in a few moments.' 
+          : 'Failed to submit work report'
+      },
       { status: 500 }
     );
   }

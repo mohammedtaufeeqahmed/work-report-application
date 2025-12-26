@@ -64,9 +64,23 @@ export async function GET(
       });
     }
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isConnectionError = 
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('Connection terminated') ||
+      errorMessage.includes('connection timeout') ||
+      errorMessage.includes('ENOTFOUND');
+    
     console.error('Employee lookup error:', error);
+    
     return NextResponse.json<ApiResponse>(
-      { success: false, error: 'Failed to fetch employee data' },
+      { 
+        success: false, 
+        error: isConnectionError 
+          ? 'Database connection error. Please try again in a few moments.' 
+          : 'Failed to fetch employee data'
+      },
       { status: 500 }
     );
   }

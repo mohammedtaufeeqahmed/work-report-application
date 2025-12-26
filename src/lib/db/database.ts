@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { logger } from '../logger';
 import * as schema from './schema';
 
@@ -8,17 +8,41 @@ import * as schema from './schema';
 // In production, always set DATABASE_URL environment variable
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport';
 
+// Log database connection info (without password) for debugging
+const dbUrlForLogging = DATABASE_URL.replace(/:[^:@]+@/, ':***@');
+console.log('[DB] Connecting to database:', dbUrlForLogging);
+
+// Track connection state
+let isPoolHealthy = true;
+let lastConnectionError: string | null = null;
+let connectionAttempts = 0;
+const MAX_CONNECTION_RETRIES = 3;
+
 // Create connection pool with optimized settings for 40-50 concurrent users
 const pool = new Pool({
   connectionString: DATABASE_URL,
   // Connection pool settings
   max: 20, // Maximum number of connections in pool
-  min: 5, // Minimum number of connections to keep idle
+  min: 2, // Reduced minimum to avoid overwhelming the database on startup
   idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-  connectionTimeoutMillis: 5000, // Wait up to 5 seconds for a connection
+  connectionTimeoutMillis: 10000, // Increased to 10 seconds for slower connections
   // Keep connections alive
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
+});
+
+// Listen for pool errors
+pool.on('error', (err) => {
+  console.error('[DB] Unexpected pool error:', err.message);
+  isPoolHealthy = false;
+  lastConnectionError = err.message;
+});
+
+// Listen for connection events
+pool.on('connect', () => {
+  isPoolHealthy = true;
+  lastConnectionError = null;
+  connectionAttempts = 0;
 });
 
 // Create Drizzle database instance with schema
@@ -26,6 +50,72 @@ export const db = drizzle(pool, { schema });
 
 // Export the pool for direct access if needed
 export { pool };
+
+/**
+ * Get the current pool health status
+ */
+export function getPoolHealth(): { healthy: boolean; error: string | null } {
+  return {
+    healthy: isPoolHealthy,
+    error: lastConnectionError,
+  };
+}
+
+/**
+ * Execute a query with automatic retry on connection failure
+ */
+export async function executeWithRetry<T>(
+  operation: () => Promise<T>,
+  retries: number = MAX_CONNECTION_RETRIES
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if it's a connection error that warrants a retry
+      const isConnectionError = 
+        lastError.message.includes('ECONNREFUSED') ||
+        lastError.message.includes('ETIMEDOUT') ||
+        lastError.message.includes('Connection terminated') ||
+        lastError.message.includes('connection timeout') ||
+        lastError.message.includes('ENOTFOUND');
+      
+      if (isConnectionError && attempt < retries) {
+        console.warn(`[DB] Connection attempt ${attempt} failed, retrying in ${attempt * 1000}ms...`, lastError.message);
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        continue;
+      }
+      
+      // Not a connection error or out of retries
+      throw lastError;
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
+ * Get a client from the pool with timeout and better error handling
+ */
+export async function getClient(): Promise<PoolClient> {
+  connectionAttempts++;
+  try {
+    const client = await pool.connect();
+    isPoolHealthy = true;
+    lastConnectionError = null;
+    return client;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    isPoolHealthy = false;
+    lastConnectionError = errorMsg;
+    console.error('[DB] Failed to get database client:', errorMsg);
+    throw error;
+  }
+}
 
 // ============================================================================
 // Database Utility Functions
@@ -36,6 +126,11 @@ export interface HealthCheckResult {
   healthy: boolean;
   error?: string;
   responseTimeMs: number;
+  poolStatus?: {
+    totalConnections: number;
+    idleConnections: number;
+    waitingClients: number;
+  };
 }
 
 // Database statistics interface
@@ -44,6 +139,8 @@ export interface DatabaseStats {
   poolIdleCount: number;
   poolWaitingCount: number;
   databaseName: string;
+  lastError: string | null;
+  connectionAttempts: number;
 }
 
 /**
@@ -53,19 +150,46 @@ export interface DatabaseStats {
 export async function healthCheck(): Promise<HealthCheckResult> {
   const startTime = performance.now();
   try {
-    // Simple query to test connection
-    await pool.query('SELECT 1');
+    // Simple query to test connection with timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Health check query timeout (5s)')), 5000);
+    });
+    
+    await Promise.race([
+      pool.query('SELECT 1'),
+      timeoutPromise
+    ]);
+    
     const responseTimeMs = performance.now() - startTime;
+    isPoolHealthy = true;
+    lastConnectionError = null;
+    
     return {
       healthy: true,
       responseTimeMs: Math.round(responseTimeMs * 100) / 100,
+      poolStatus: {
+        totalConnections: pool.totalCount,
+        idleConnections: pool.idleCount,
+        waitingClients: pool.waitingCount,
+      },
     };
   } catch (error) {
     const responseTimeMs = performance.now() - startTime;
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    isPoolHealthy = false;
+    lastConnectionError = errorMsg;
+    
+    console.error('[DB] Health check failed:', errorMsg);
+    
     return {
       healthy: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMsg,
       responseTimeMs: Math.round(responseTimeMs * 100) / 100,
+      poolStatus: {
+        totalConnections: pool.totalCount,
+        idleConnections: pool.idleCount,
+        waitingClients: pool.waitingCount,
+      },
     };
   }
 }
@@ -79,6 +203,8 @@ export function getDatabaseStats(): DatabaseStats {
     poolIdleCount: pool.idleCount,
     poolWaitingCount: pool.waitingCount,
     databaseName: 'workreport',
+    lastError: lastConnectionError,
+    connectionAttempts,
   };
 }
 
@@ -87,9 +213,17 @@ export function getDatabaseStats(): DatabaseStats {
  */
 export async function isDatabaseConnected(): Promise<boolean> {
   try {
-    await pool.query('SELECT 1');
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Connection check timeout')), 5000);
+    });
+    
+    await Promise.race([
+      pool.query('SELECT 1'),
+      timeoutPromise
+    ]);
     return true;
-  } catch {
+  } catch (error) {
+    console.error('[DB] Connection check failed:', error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
 }
@@ -355,6 +489,66 @@ export function setupGracefulShutdown(): void {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+/**
+ * Test database connection on startup
+ * Logs detailed information about connection status
+ */
+export async function testDatabaseConnection(): Promise<boolean> {
+  console.log('[DB] Testing database connection...');
+  console.log('[DB] Pool status - Total:', pool.totalCount, ', Idle:', pool.idleCount, ', Waiting:', pool.waitingCount);
+  
+  try {
+    const startTime = Date.now();
+    await pool.query('SELECT NOW() as current_time');
+    const duration = Date.now() - startTime;
+    
+    console.log(`[DB] ✓ Database connection successful (${duration}ms)`);
+    isPoolHealthy = true;
+    lastConnectionError = null;
+    return true;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[DB] ✗ Database connection failed:', errorMsg);
+    console.error('[DB] Please check:');
+    console.error('[DB]   1. DATABASE_URL environment variable is set correctly');
+    console.error('[DB]   2. Database server is running and accessible');
+    console.error('[DB]   3. Network connectivity to the database server');
+    console.error('[DB]   4. Database credentials are correct');
+    
+    isPoolHealthy = false;
+    lastConnectionError = errorMsg;
+    return false;
+  }
+}
+
+/**
+ * Get a detailed connection status report
+ */
+export function getConnectionStatus(): {
+  databaseUrl: string;
+  poolHealthy: boolean;
+  lastError: string | null;
+  poolStats: {
+    total: number;
+    idle: number;
+    waiting: number;
+  };
+} {
+  // Mask the password in the URL for security
+  const maskedUrl = DATABASE_URL.replace(/:[^:@]+@/, ':***@');
+  
+  return {
+    databaseUrl: maskedUrl,
+    poolHealthy: isPoolHealthy,
+    lastError: lastConnectionError,
+    poolStats: {
+      total: pool.totalCount,
+      idle: pool.idleCount,
+      waiting: pool.waitingCount,
+    },
+  };
 }
 
 // Re-export schema for convenience

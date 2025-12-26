@@ -1,6 +1,6 @@
 /**
  * Production-safe logging utility
- * Only logs in development, reduces overhead in production
+ * Logs errors and warnings always, other levels only in development
  */
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -13,12 +13,11 @@ export const logger = {
   },
   error: (...args: unknown[]) => {
     // Always log errors, even in production
-    console.error(...args);
+    console.error('[ERROR]', new Date().toISOString(), ...args);
   },
   warn: (...args: unknown[]) => {
-    if (isDevelopment) {
-      console.warn(...args);
-    }
+    // Always log warnings in production for debugging
+    console.warn('[WARN]', new Date().toISOString(), ...args);
   },
   info: (...args: unknown[]) => {
     if (isDevelopment) {

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { 
   getDatabaseStats, 
   healthCheck, 
-  isDatabaseConnected 
+  isDatabaseConnected,
+  getConnectionStatus 
 } from '@/lib/db/database';
 import { getQueueStatus, getRecentQueueFailures } from '@/lib/queue/work-report-queue';
 import type { ApiResponse } from '@/types';
@@ -13,11 +14,14 @@ export interface DatabaseStatsResponse {
     connected: boolean;
     responseTimeMs: number;
     error?: string;
+    connectionUrl?: string;
     stats: {
       poolSize: number;
       poolIdleCount: number;
       poolWaitingCount: number;
       databaseName: string;
+      lastError: string | null;
+      connectionAttempts: number;
     } | null;
   };
   queue: {
@@ -57,15 +61,14 @@ export async function GET() {
     // Database health check
     const health = await healthCheck();
     const connected = await isDatabaseConnected();
+    const connectionStatus = getConnectionStatus();
     
-    // Get database stats (only if healthy)
+    // Get database stats (always try, even if unhealthy - stats might still be available)
     let dbStats = null;
-    if (health.healthy) {
-      try {
-        dbStats = getDatabaseStats();
-      } catch (error) {
-        console.error('[API] Failed to get database stats:', error);
-      }
+    try {
+      dbStats = getDatabaseStats();
+    } catch (error) {
+      console.error('[API] Failed to get database stats:', error);
     }
     
     // Queue status
@@ -85,7 +88,8 @@ export async function GET() {
         healthy: health.healthy,
         connected,
         responseTimeMs: health.responseTimeMs,
-        error: health.error,
+        error: health.error || connectionStatus.lastError || undefined,
+        connectionUrl: connectionStatus.databaseUrl,
         stats: dbStats,
       },
       queue: {
