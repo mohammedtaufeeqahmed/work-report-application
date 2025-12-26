@@ -70,7 +70,7 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
   };
 
   // Get date status for color coding
-  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'holiday' | 'sunday' | 'future' => {
+  const getDateStatus = (dateStr: string): 'working' | 'leave' | 'not_submitted' | 'working_on_duty' | 'working_halfday' | 'holiday' | 'sunday' | 'future' => {
     // Check if it's Sunday first (Sunday is always a holiday)
     if (isSunday(dateStr)) {
       return 'sunday';
@@ -100,6 +100,10 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
       return 'working_on_duty';
     }
 
+    if (report.status === 'working' && report.halfday) {
+      return 'working_halfday';
+    }
+
     if (report.status === 'working') {
       return 'working';
     }
@@ -123,6 +127,8 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
         return `bg-gradient-to-br from-violet-500 to-purple-600 text-white ${isToday ? 'ring-2 ring-violet-400 ring-offset-2' : ''}`;
       case 'working':
         return `bg-emerald-500 text-white ${isToday ? 'ring-2 ring-emerald-400 ring-offset-2' : ''}`;
+      case 'working_halfday':
+        return `bg-yellow-500 text-white ${isToday ? 'ring-2 ring-yellow-400 ring-offset-2' : ''}`;
       case 'leave':
         return `bg-orange-500 text-white ${isToday ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`;
       case 'working_on_duty':
@@ -153,6 +159,7 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
     
     const statusLabels: Record<string, string> = {
       'working': 'Working',
+      'working_halfday': 'Half Day',
       'leave': 'Leave',
       'working_on_duty': 'Working + On Duty',
       'not_submitted': 'Not Submitted',
@@ -299,6 +306,10 @@ function WorkReportCalendarComponent({ reports, holidays = [], onDateClick }: Wo
             <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
               <div className="w-4 h-4 rounded-md bg-emerald-500 shadow-sm"></div>
               <span className="text-muted-foreground font-medium">Working</span>
+            </div>
+            <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+              <div className="w-4 h-4 rounded-md bg-yellow-500 shadow-sm"></div>
+              <span className="text-muted-foreground font-medium">Half Day</span>
             </div>
             <div className="flex items-center gap-2.5 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
               <div className="w-4 h-4 rounded-md bg-orange-500 shadow-sm"></div>
