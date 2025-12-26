@@ -12,6 +12,7 @@ const protectedRoutes = [
   '/employee-reports',
   '/employee-dashboard',
   '/holidays',
+  '/mark-attendance',
   // '/work-report' - removed from protected routes to allow unauthenticated access
   '/profile',
 ];
@@ -80,6 +81,7 @@ const ROUTE_TO_PAGE_ACCESS: Record<string, keyof PageAccess> = {
   '/admin': 'admin_dashboard',
   '/super-admin': 'super_admin_dashboard',
   '/holidays': 'mark_holidays',
+  '/mark-attendance': 'mark_attendance',
 };
 
 // Get JWT secret
@@ -106,6 +108,15 @@ function getUserPageAccess(payload: { pageAccess?: PageAccess | null; role: User
 
 // Check if user has access to a specific route
 function hasRouteAccess(pathname: string, pageAccess: PageAccess, role?: UserRole, department?: string): boolean {
+  // Special handling for mark-attendance route
+  if (pathname.startsWith('/mark-attendance')) {
+    // Only Operations department users with mark_attendance permission
+    if (department === 'Operations' && pageAccess.mark_attendance === true) {
+      return true;
+    }
+    return false;
+  }
+
   // Special handling for holidays route
   if (pathname.startsWith('/holidays')) {
     // Managers, Admins, and Super Admins always have access

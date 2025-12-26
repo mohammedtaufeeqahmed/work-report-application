@@ -15,7 +15,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Menu, LogOut, User, LayoutDashboard, FileText, BarChart3, ChevronDown, ArrowRight, Home, CalendarDays } from 'lucide-react';
+import { Menu, LogOut, User, LayoutDashboard, FileText, BarChart3, ChevronDown, ArrowRight, Home, CalendarDays, UserCheck } from 'lucide-react';
 import type { SessionUser, PageAccess } from '@/types';
 import { DEFAULT_PAGE_ACCESS } from '@/types';
 
@@ -95,8 +95,14 @@ export function Navbar() {
   const navLinks = [
     { href: '/employee-dashboard', label: 'Dashboard', icon: Home, requireAuth: true, accessKey: 'dashboard' as keyof PageAccess },
     { href: '/work-report', label: 'Submit Report', icon: FileText, accessKey: 'submit_report' as keyof PageAccess },
+    // Mark Attendance for Operations users with permission
+    { href: '/mark-attendance', label: 'Mark Attendance', icon: UserCheck, requireAuth: true, accessKey: 'mark_attendance' as keyof PageAccess, requireDepartment: 'Operations' },
   ].filter(link => {
     if (!user) return !link.requireAuth;
+    // Check department requirement if specified
+    if ((link as any).requireDepartment && user.department !== (link as any).requireDepartment) {
+      return false;
+    }
     return pageAccess?.[link.accessKey] === true;
   });
 
@@ -123,6 +129,11 @@ export function Navbar() {
     user.role === 'admin' || 
     user.role === 'superadmin' || 
     (user.department === 'Operations' && pageAccess?.mark_holidays === true)
+  );
+
+  // Mark Attendance link - show if Operations user with mark_attendance permission
+  const canMarkAttendance = user && (
+    user.department === 'Operations' && pageAccess?.mark_attendance === true
   );
 
   return (
@@ -222,6 +233,20 @@ export function Navbar() {
                           <span className="flex items-center gap-2">
                             <CalendarDays className="h-4 w-4" />
                             Holidays
+                          </span>
+                          <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {canMarkAttendance && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/mark-attendance" className="cursor-pointer flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <UserCheck className="h-4 w-4" />
+                            Mark Attendance
                           </span>
                           <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                         </Link>
@@ -403,6 +428,20 @@ export function Navbar() {
                         >
                           <CalendarDays className="h-4 w-4" />
                           Holidays
+                        </Link>
+                      )}
+                      {canMarkAttendance && (
+                        <Link
+                          href="/mark-attendance"
+                          className={`flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-all duration-200 active-press ${
+                            pathname === '/mark-attendance'
+                              ? 'bg-foreground text-background font-medium' 
+                              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                          }`}
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <UserCheck className="h-4 w-4" />
+                          Mark Attendance
                         </Link>
                       )}
                     </>
