@@ -90,19 +90,20 @@ echo ""
 echo "Step 2: Database Configuration..."
 if [ -z "$DATABASE_URL" ]; then
     echo "Please provide your PostgreSQL connection details:"
-    read -p "Database Name [workreportapplication]: " DB_NAME
+    # Use /dev/tty to read input when running via curl | bash
+    read -p "Database Name [workreportapplication]: " DB_NAME < /dev/tty
     DB_NAME=${DB_NAME:-workreportapplication}
     
-    read -p "Database User [workreport_user]: " DB_USER
+    read -p "Database User [workreport_user]: " DB_USER < /dev/tty
     DB_USER=${DB_USER:-workreport_user}
     
-    read -sp "Database Password: " DB_PASSWORD
+    read -sp "Database Password: " DB_PASSWORD < /dev/tty
     echo ""
     
-    read -p "PostgreSQL Host [localhost]: " DB_HOST
+    read -p "PostgreSQL Host [localhost]: " DB_HOST < /dev/tty
     DB_HOST=${DB_HOST:-localhost}
     
-    read -p "PostgreSQL Port [5432]: " DB_PORT
+    read -p "PostgreSQL Port [5432]: " DB_PORT < /dev/tty
     DB_PORT=${DB_PORT:-5432}
     
     # URL encode password
@@ -139,11 +140,21 @@ fi
 # Step 3: Clone or update repository
 echo ""
 echo "Step 3: Setting up application..."
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR/.git" ]; then
+    # Directory exists and is a git repo - update it
     status "Updating existing installation..."
     cd "$INSTALL_DIR"
     git pull origin main || git pull origin master || true
+elif [ -d "$INSTALL_DIR" ]; then
+    # Directory exists but is not a git repo - remove and clone fresh
+    warn "Directory exists but is not a git repository. Removing and cloning fresh..."
+    $SUDO rm -rf "$INSTALL_DIR"
+    $SUDO mkdir -p "$INSTALL_DIR"
+    $SUDO chown $USER:$USER "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 else
+    # Directory doesn't exist - clone fresh
     status "Cloning repository..."
     $SUDO mkdir -p "$INSTALL_DIR"
     $SUDO chown $USER:$USER "$INSTALL_DIR"
