@@ -4,22 +4,25 @@
 # Work Report App - Automated Deployment Script
 # Run with: curl -sSL <raw-url-to-this-script> | bash
 # Or: bash deploy.sh
+# 
+# For production with existing PostgreSQL, use: bash deploy-production.sh
 # =============================================================================
 
 set -e
 
-# Configuration - EDIT THESE VALUES
+# Configuration - EDIT THESE VALUES OR USE ENVIRONMENT VARIABLES
 APP_NAME="work-report-app"
-REPO_URL="https://github.com/mohammedtaufeeqahmed/work-report-application.git"
-INSTALL_DIR="/opt/work-report-app"
-DATABASE_URL="postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport"
-JWT_SECRET="$(openssl rand -base64 32)"  # Auto-generate secure secret
-APP_URL=""  # Set your domain if you have one, e.g., https://app.yourdomain.com
+REPO_URL="${REPO_URL:-https://github.com/mohammedtaufeeqahmed/work-report-application.git}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/work-report-app}"
+DATABASE_URL="${DATABASE_URL:-}"  # Will be prompted if not set
+JWT_SECRET="${JWT_SECRET:-$(openssl rand -base64 32)}"  # Auto-generate secure secret
+APP_URL="${APP_URL:-}"  # Set your domain if you have one, e.g., https://app.yourdomain.com
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}"
@@ -40,6 +43,10 @@ warn() {
 error() {
     echo -e "${RED}[✗]${NC} $1"
     exit 1
+}
+
+info() {
+    echo -e "${BLUE}[i]${NC} $1"
 }
 
 # Check if running as root or with sudo
@@ -78,9 +85,60 @@ fi
 $SUDO systemctl start docker 2>/dev/null || true
 $SUDO systemctl enable docker 2>/dev/null || true
 
-# Step 2: Clone or update repository
+# Step 2: Get Database Configuration if not set
 echo ""
-echo "Step 2: Setting up application..."
+echo "Step 2: Database Configuration..."
+if [ -z "$DATABASE_URL" ]; then
+    echo "Please provide your PostgreSQL connection details:"
+    read -p "Database Name [workreportapplication]: " DB_NAME
+    DB_NAME=${DB_NAME:-workreportapplication}
+    
+    read -p "Database User [workreport_user]: " DB_USER
+    DB_USER=${DB_USER:-workreport_user}
+    
+    read -sp "Database Password: " DB_PASSWORD
+    echo ""
+    
+    read -p "PostgreSQL Host [localhost]: " DB_HOST
+    DB_HOST=${DB_HOST:-localhost}
+    
+    read -p "PostgreSQL Port [5432]: " DB_PORT
+    DB_PORT=${DB_PORT:-5432}
+    
+    # URL encode password
+    url_encode() {
+        local string="$1"
+        local strlen=${#string}
+        local encoded=""
+        local pos c o
+        for (( pos=0 ; pos<strlen ; pos++ )); do
+            c=${string:$pos:1}
+            case "$c" in
+                [-_.~a-zA-Z0-9] ) o="$c" ;;
+                * ) printf -v o '%%%02X' "'$c" ;;
+            esac
+            encoded+="$o"
+        done
+        echo "$encoded"
+    }
+    
+    DB_PASSWORD_ENCODED=$(url_encode "$DB_PASSWORD")
+    DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    
+    # Test connection
+    info "Testing database connection..."
+    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" > /dev/null 2>&1; then
+        status "Database connection successful"
+    else
+        warn "Could not verify database connection. Continuing anyway..."
+    fi
+else
+    status "Using DATABASE_URL from environment"
+fi
+
+# Step 3: Clone or update repository
+echo ""
+echo "Step 3: Setting up application..."
 if [ -d "$INSTALL_DIR" ]; then
     status "Updating existing installation..."
     cd "$INSTALL_DIR"
@@ -93,9 +151,9 @@ else
     cd "$INSTALL_DIR"
 fi
 
-# Step 3: Create environment file
+# Step 4: Create environment file
 echo ""
-echo "Step 3: Creating environment configuration..."
+echo "Step 4: Creating environment configuration..."
 cat > .env << EOF
 # Database Configuration
 DATABASE_URL=${DATABASE_URL}
@@ -116,24 +174,32 @@ EMAIL_FROM_NAME=WorkReport
 EOF
 status "Environment file created"
 
-# Step 4: Stop existing container if running
+# Step 5: Use production docker-compose if available
 echo ""
-echo "Step 4: Stopping existing containers..."
+echo "Step 5: Configuring Docker Compose..."
+if [ -f "docker-compose.production.yml" ]; then
+    cp docker-compose.production.yml docker-compose.yml
+    status "Production Docker Compose configured"
+fi
+
+# Step 6: Stop existing container if running
+echo ""
+echo "Step 6: Stopping existing containers..."
 $SUDO docker compose down 2>/dev/null || true
 status "Existing containers stopped"
 
-# Step 5: Build and start
+# Step 7: Build and start
 echo ""
-echo "Step 5: Building and starting application..."
+echo "Step 7: Building and starting application..."
 $SUDO docker compose build --no-cache
 status "Docker image built"
 
 $SUDO docker compose up -d
 status "Application started"
 
-# Step 6: Wait for application to be healthy
+# Step 8: Wait for application to be healthy
 echo ""
-echo "Step 6: Waiting for application to be healthy..."
+echo "Step 8: Waiting for application to be healthy..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
@@ -151,9 +217,9 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     error "Application failed to start. Check logs with: docker compose logs"
 fi
 
-# Step 7: Initialize database
+# Step 9: Initialize database
 echo ""
-echo "Step 7: Initializing database..."
+echo "Step 9: Initializing database..."
 sleep 3  # Extra wait for database connection
 
 INIT_RESPONSE=$(curl -s -X POST http://localhost:3000/api/db/init)
@@ -166,7 +232,7 @@ else
     echo "  You may need to manually call: curl -X POST http://localhost:3000/api/db/init"
 fi
 
-# Step 8: Display completion message
+# Step 10: Display completion message
 echo ""
 echo -e "${GREEN}"
 echo "============================================================"
