@@ -50,3 +50,6 @@ public/workbox-*.js.map
 *.db-shm
 *.db-wal
 *.db-journal
+
+# GitHub
+.github
