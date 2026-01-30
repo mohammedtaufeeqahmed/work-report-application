@@ -6,7 +6,7 @@ import * as schema from './schema';
 // Get database URL from environment
 // WARNING: Default connection string is for development only
 // In production, always set DATABASE_URL environment variable
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/workreport';
 
 // Log database connection info (without password) for debugging
 const dbUrlForLogging = DATABASE_URL.replace(/:[^:@]+@/, ':***@');

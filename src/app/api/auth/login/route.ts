@@ -90,10 +90,10 @@ export async function POST(request: NextRequest) {
     console.error('[LOGIN ERROR]', error);
     const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
     
-    // Don't expose internal errors in production
-    const userMessage = process.env.NODE_ENV === 'production' 
-      ? 'An error occurred during login. Please try again.' 
-      : errorMessage;
+    // In production, we usually hide internal errors, but for debugging this 500 issue,
+    // we will expose the error message to the client.
+    // TODO: Revert this to secure error handling once the issue is resolved.
+    const userMessage = errorMessage;
     
     return NextResponse.json<ApiResponse>(
       {
