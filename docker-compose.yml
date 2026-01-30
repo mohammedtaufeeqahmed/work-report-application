@@ -10,7 +10,7 @@ services:
       # Required: JWT Secret for session tokens
       - JWT_SECRET=${JWT_SECRET}
       # Required: PostgreSQL Database URL
-      - DATABASE_URL=${DATABASE_URL:-postgresql://developmentTeam:%40Shravan%40H00@172.31.7.209:5432/workreport}
+      - DATABASE_URL=${DATABASE_URL}
       # Optional: SMTP Configuration (for password reset emails)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
