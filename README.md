@@ -21,7 +21,7 @@
 [Pages](#-pages) •
 [Tech Stack](#-tech-stack) •
 [API Reference](#-api-reference) •
-[EC2 Hosting](#-ec2-hosting) •
+[Deployment](#-deployment) •
 [Configuration](#-configuration)
 
 </div>
@@ -110,10 +110,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/work-report-app.git
-
-# Navigate to the project directory
-cd work-report-app
+git clone https://github.com/mohammedtaufeeqahmed/work-report-application.git
+cd work-report-application
 
 # Install dependencies
 npm install
@@ -401,438 +399,26 @@ graph TD
 
 ---
 
-## ☁️ EC2 Hosting
+## 🚀 Deployment
 
-### AWS EC2 Deployment Guide
+Full deployment options (Docker, PM2, VPS, EC2, SSL, backups) are documented in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
-This section covers deploying the Work Report Application to an AWS EC2 instance.
+### Quick deploy (Docker + PostgreSQL)
 
-### Prerequisites
-
-- AWS Account with EC2 access
-- Domain name (optional, but recommended)
-- SSH key pair for EC2 access
-
-### Step 1: Launch EC2 Instance
-
-1. **Navigate to EC2 Dashboard** → Launch Instance
-
-2. **Choose AMI:**
-   - Amazon Linux 2023 or Ubuntu 22.04 LTS (recommended)
-
-3. **Instance Type:**
-   - `t3.small` (minimum for production)
-   - `t3.medium` (recommended for better performance)
-
-4. **Configure Storage:**
-   - Minimum 20GB gp3 SSD
-   - Enable "Delete on termination" = No (to preserve data)
-
-5. **Security Group Rules:**
-
-   | Type | Port | Source | Description |
-   |------|------|--------|-------------|
-   | SSH | 22 | Your IP | Admin access |
-   | HTTP | 80 | 0.0.0.0/0 | Web traffic |
-   | HTTPS | 443 | 0.0.0.0/0 | Secure web traffic |
-   | Custom TCP | 3000 | 0.0.0.0/0 | Node.js (optional) |
-
-### Step 2: Connect & Setup Environment
+On a server with PostgreSQL already running:
 
 ```bash
-# Connect to EC2
-ssh -i your-key.pem ec2-user@your-ec2-public-ip
-
-# Update system
-sudo yum update -y  # Amazon Linux
-# OR
-sudo apt update && sudo apt upgrade -y  # Ubuntu
-
-# Install Node.js 20.x
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo yum install -y nodejs  # Amazon Linux
-# OR
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs  # Ubuntu
-
-# Install PM2 for process management
-sudo npm install -g pm2
-
-# Install Git
-sudo yum install -y git  # Amazon Linux
-# OR
-sudo apt install -y git  # Ubuntu
+curl -sSL https://raw.githubusercontent.com/mohammedtaufeeqahmed/work-report-application/main/deploy-production.sh | bash
 ```
 
-### Step 3: Deploy Application
+Or clone and run:
 
 ```bash
-# Create app directory
-sudo mkdir -p /var/www/work-report-app
-sudo chown $USER:$USER /var/www/work-report-app
-cd /var/www/work-report-app
-
-# Clone repository
-git clone https://github.com/yourusername/work-report-app.git .
-
-# Install dependencies
-npm install
-
-# Create data directory for SQLite
-mkdir -p data
-
-# Create environment file
-nano .env.local
+git clone https://github.com/mohammedtaufeeqahmed/work-report-application.git
+cd work-report-application
+chmod +x deploy-production.sh
+sudo ./deploy-production.sh
 ```
-
-**Environment Variables (.env.local):**
-
-```env
-# Database
-DATABASE_PATH=./data/workreport.db
-
-# Authentication (generate secure secrets!)
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-NEXTAUTH_SECRET=another-super-secret-key-min-32-chars
-
-# Google OAuth (Optional - for Google Workspace login)
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_ALLOWED_DOMAINS=domain1.com,domain2.com
-NEXT_PUBLIC_APP_URL=https://your-domain.com
-
-# Google Sheets Backup (Optional)
-GOOGLE_SHEETS_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-GOOGLE_SHEETS_SPREADSHEET_ID=your-spreadsheet-id
-
-# Environment
-NODE_ENV=production
-```
-
-### Step 4: Build & Start Application
-
-```bash
-# Build the application
-npm run build
-
-# Start with PM2
-pm2 start npm --name "work-report" -- start
-
-# Enable auto-start on reboot
-pm2 startup
-pm2 save
-
-# View logs
-pm2 logs work-report
-```
-
-### Step 5: Setup Nginx Reverse Proxy (Recommended)
-
-```bash
-# Install Nginx
-sudo yum install -y nginx  # Amazon Linux
-# OR
-sudo apt install -y nginx  # Ubuntu
-
-# Create Nginx config
-sudo nano /etc/nginx/conf.d/work-report.conf
-```
-
-**Nginx Configuration:**
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;  # Or EC2 public IP
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        
-        # Increase timeouts for long requests
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-
-    # Static files caching
-    location /_next/static {
-        proxy_pass http://localhost:3000;
-        proxy_cache_valid 60m;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-```bash
-# Test and restart Nginx
-sudo nginx -t
-sudo systemctl restart nginx
-sudo systemctl enable nginx
-```
-
-### Step 6: Setup SSL with Certbot (HTTPS)
-
-```bash
-# Install Certbot
-sudo yum install -y certbot python3-certbot-nginx  # Amazon Linux
-# OR
-sudo apt install -y certbot python3-certbot-nginx  # Ubuntu
-
-# Get SSL certificate
-sudo certbot --nginx -d your-domain.com
-
-# Auto-renewal (already configured, but verify)
-sudo certbot renew --dry-run
-```
-
-### Step 7: Database Backup to S3
-
-```bash
-# Install AWS CLI
-sudo yum install -y aws-cli  # Amazon Linux
-# OR
-sudo apt install -y awscli  # Ubuntu
-
-# Configure AWS credentials
-aws configure
-
-# Create backup script
-nano /var/www/work-report-app/scripts/backup-to-s3.sh
-```
-
-**Backup Script:**
-
-```bash
-#!/bin/bash
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DB_PATH="/var/www/work-report-app/data/workreport.db"
-S3_BUCKET="your-backup-bucket"
-BACKUP_NAME="workreport_backup_${TIMESTAMP}.db"
-
-# Create backup
-sqlite3 $DB_PATH ".backup /tmp/${BACKUP_NAME}"
-
-# Upload to S3
-aws s3 cp /tmp/${BACKUP_NAME} s3://${S3_BUCKET}/backups/${BACKUP_NAME}
-
-# Clean up
-rm /tmp/${BACKUP_NAME}
-
-# Keep only last 30 backups in S3
-aws s3 ls s3://${S3_BUCKET}/backups/ | sort | head -n -30 | awk '{print $4}' | xargs -I {} aws s3 rm s3://${S3_BUCKET}/backups/{}
-
-echo "Backup completed: ${BACKUP_NAME}"
-```
-
-```bash
-# Make executable and add to cron
-chmod +x /var/www/work-report-app/scripts/backup-to-s3.sh
-crontab -e
-
-# Add daily backup at 2 AM
-0 2 * * * /var/www/work-report-app/scripts/backup-to-s3.sh >> /var/log/db-backup.log 2>&1
-```
-
-### Step 8: Database Maintenance Cron Job
-
-```bash
-# Create maintenance script
-nano /var/www/work-report-app/scripts/maintenance.sh
-```
-
-**Maintenance Script:**
-
-```bash
-#!/bin/bash
-# Run database maintenance
-curl -X POST http://localhost:3000/api/db/maintenance
-
-echo "Maintenance completed at $(date)"
-```
-
-```bash
-# Add to cron (daily at 3 AM)
-chmod +x /var/www/work-report-app/scripts/maintenance.sh
-crontab -e
-
-# Add line:
-0 3 * * * /var/www/work-report-app/scripts/maintenance.sh >> /var/log/db-maintenance.log 2>&1
-```
-
-### Monitoring & Management
-
-```bash
-# Application status
-pm2 status
-
-# View logs
-pm2 logs work-report --lines 100
-
-# Restart application
-pm2 restart work-report
-
-# Monitor resources
-pm2 monit
-
-# Check disk space
-df -h
-
-# Check database size
-ls -lh /var/www/work-report-app/data/
-
-# Health check
-curl http://localhost:3000/api/db/stats
-```
-
-### Updating the Application
-
-```bash
-cd /var/www/work-report-app
-
-# Pull latest changes
-git pull origin main
-
-# Install dependencies
-npm install
-
-# Rebuild
-npm run build
-
-# Restart
-pm2 restart work-report
-```
-
-### EC2 Checklist
-
-- [ ] EC2 instance launched with appropriate size
-- [ ] Security group configured with required ports
-- [ ] Node.js and PM2 installed
-- [ ] Application cloned and built
-- [ ] Environment variables configured
-- [ ] Nginx reverse proxy setup
-- [ ] SSL certificate installed (HTTPS)
-- [ ] Database backup cron job configured
-- [ ] Database maintenance cron job configured
-- [ ] PM2 startup script enabled
-- [ ] Domain DNS configured (if using custom domain)
-
-### 💾 Disk Space Requirements
-
-#### Application Size Breakdown
-
-| Component | Size |
-|-----------|------|
-| **Docker Engine** | ~400-500 MB |
-| **Node.js Alpine Image** (node:20-alpine) | ~180 MB |
-| **Build tools** (python3, make, g++) | ~200-300 MB |
-| **node_modules** (googleapis is large) | ~600-800 MB |
-| **Next.js build** (.next folder) | ~100-200 MB |
-| **nginx:alpine image** | ~40-50 MB |
-| **SQLite database** (data) | ~10-50 MB (grows with usage) |
-| **Docker build cache** | ~500 MB - 1 GB |
-| **Total for application** | **~2-3 GB** |
-
-#### Recommended EC2 Storage
-
-| Use Case | Storage |
-|----------|---------|
-| **Minimum** | 8-10 GB (tight) |
-| **Recommended** | 15-20 GB (comfortable) |
-| **With room to grow** | 30-40 GB |
-
-### 🧹 EC2 Disk Cleanup Commands
-
-> ⚠️ **Warning**: Some Docker cleanup commands can delete your application. Use the safe commands below.
-
-#### ✅ Safe Commands (No Impact on Application)
-
-```bash
-# Check disk usage
-df -h
-
-# Check what's using space
-du -sh /* 2>/dev/null | sort -h
-
-# Check Docker space usage
-docker system df
-
-# Clean system packages (Ubuntu)
-sudo apt autoremove -y
-sudo apt clean
-
-# Clean system packages (Amazon Linux)
-sudo yum clean all
-
-# Clean old system logs (keep last 7 days)
-sudo journalctl --vacuum-time=7d
-```
-
-#### ✅ Safe Docker Cleanup (Won't Break Running App)
-
-```bash
-# Remove only dangling images (unused build layers) - SAFE
-docker image prune -f
-
-# Remove only build cache - SAFE
-docker builder prune -f
-
-# Remove unused images BUT keep running containers' images
-# Make sure your app container is RUNNING first!
-docker image prune -a -f
-```
-
-#### ⚠️ Dangerous Commands (Use with Caution)
-
-```bash
-# ❌ This will DELETE your app image and may delete database volumes!
-docker system prune -a --volumes
-
-# Only use this if you want to completely reset Docker
-# You will need to rebuild your application after this
-```
-
-#### Why Your Disk Might Be Full
-
-If you're seeing high disk usage (70%+), common causes are:
-
-1. **Docker build cache** - Multiple builds leave cached layers
-2. **Old Docker images** - Previous builds not cleaned up
-3. **System updates** - EC2 AMI + package updates
-4. **Log files** - Application and system logs accumulating
-
-#### Recommended Cleanup Sequence
-
-```bash
-# 1. Check what's using space
-df -h
-du -sh /var/lib/docker/* 2>/dev/null | sort -h
-
-# 2. Clean Docker build cache only
-docker builder prune -f
-
-# 3. Clean dangling images only
-docker image prune -f
-
-# 4. Clean system packages
-sudo apt autoremove -y && sudo apt clean
-
-# 5. Clean old logs
-sudo journalctl --vacuum-time=7d
-
-# 6. Verify disk space recovered
-df -h
-```
-
-After cleanup, a properly configured EC2 should use **20-30%** of a 40GB disk, not 70%+.
 
 ---
 
@@ -911,54 +497,29 @@ Super Admins can configure who can edit work reports:
 ## 📁 Project Structure
 
 ```
-work-report-app/
-├── 📂 src/
-│   ├── 📂 app/
-│   │   ├── 📂 (auth)/           # Auth pages (login, reset-password)
-│   │   ├── 📂 (dashboard)/      # Dashboard pages by role
-│   │   │   ├── 📂 admin/
-│   │   │   ├── 📂 employee-dashboard/  # NEW: Employee dashboard
-│   │   │   ├── 📂 management-dashboard/
-│   │   │   ├── 📂 managers-dashboard/
-│   │   │   └── 📂 super-admin/
-│   │   ├── 📂 api/              # API routes
-│   │   │   ├── 📂 admin/        # Admin endpoints
-│   │   │   ├── 📂 analytics/    # Analytics endpoints
-│   │   │   ├── 📂 auth/         # Auth endpoints
-│   │   │   ├── 📂 db/           # NEW: Database maintenance
-│   │   │   ├── 📂 settings/     # NEW: Permissions endpoints
-│   │   │   ├── 📂 work-reports/ # Work report endpoints
-│   │   │   └── ...
-│   │   ├── 📂 employee-reports/ # Employee reports page
-│   │   ├── 📂 work-report/      # Work report submission
-│   │   └── 📄 page.tsx          # Home page
-│   ├── 📂 components/
-│   │   ├── 📂 ui/               # Shadcn UI components
-│   │   ├── 📄 navbar.tsx        # Navigation component
-│   │   ├── 📄 work-report-form.tsx
-│   │   └── ...
-│   ├── 📂 lib/
-│   │   ├── 📂 db/               # Database layer
-│   │   │   ├── 📄 database.ts   # SQLite connection with WAL
-│   │   │   ├── 📄 schema.ts     # Database schema
-│   │   │   └── 📄 queries.ts    # Query functions
-│   │   ├── 📂 queue/            # Async queue system
-│   │   ├── 📄 auth.ts           # Auth utilities
-│   │   ├── 📄 date.ts           # NEW: IST date utilities
-│   │   └── 📄 google-sheets.ts  # Backup integration
-│   ├── 📂 types/
-│   │   └── 📄 index.ts          # TypeScript types
-│   └── 📄 middleware.ts         # Route protection
-├── 📂 data/                     # SQLite database files
-├── 📂 public/                   # Static assets
-│   ├── 📂 icons/                # NEW: PWA icons
-│   ├── 📄 manifest.json         # NEW: PWA manifest
-│   └── 📄 sw.js                 # NEW: Service worker
-├── 📂 scripts/                  # Utility scripts
-├── 📄 next.config.ts            # Next.js config with PWA
-├── 📄 package.json
-├── 📄 tsconfig.json
-└── 📄 README.md
+work-report-application/
+├── src/
+│   ├── app/
+│   │   ├── (auth)/              # Login, reset-password
+│   │   ├── (dashboard)/         # Role-based dashboards (admin, employee-dashboard, etc.)
+│   │   ├── api/                 # API routes (auth, admin, work-reports, db, etc.)
+│   │   ├── employee-reports/
+│   │   ├── work-report/
+│   │   └── page.tsx
+│   ├── components/              # UI components, navbar, work-report-form
+│   ├── lib/                     # db, auth, queue, utils, google-sheets
+│   ├── types/
+│   └── middleware.ts
+├── data/                        # SQLite database (dev)
+├── public/                      # Static assets, PWA icons, manifest
+├── scripts/                     # backup-db.sh, generate-icons.mjs
+├── deploy-production.sh        # One-command production deploy (Docker + PostgreSQL)
+├── Dockerfile
+├── docker-compose.production.yml
+├── DEPLOYMENT.md                # Full deployment guide
+├── next.config.ts
+├── package.json
+└── README.md
 ```
 
 ---
@@ -995,36 +556,6 @@ flowchart LR
 ```
 
 > **Note:** Google Sheets is used as a backup only. All operations read from SQLite database.
-
----
-
-## 🚀 Deployment
-
-### Build for Production
-
-```bash
-# Build the application
-npm run build
-
-# Start production server
-npm run start
-```
-
-### Docker Deployment (Alternative)
-
-```dockerfile
-FROM node:20-alpine
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY . .
-RUN npm run build
-
-EXPOSE 3000
-CMD ["npm", "start"]
-```
 
 ---
 
