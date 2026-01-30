@@ -20,7 +20,7 @@ const MAX_CONNECTION_RETRIES = 3;
 
 // Create connection pool with optimized settings for 40-50 concurrent users
 const pool = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/workreport',
   // Connection pool settings
   max: 20, // Maximum number of connections in pool
   min: 2, // Reduced minimum to avoid overwhelming the database on startup

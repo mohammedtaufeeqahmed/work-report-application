@@ -92,6 +92,7 @@ function getJwtSecret(): Uint8Array {
     // In production, this should never happen, but we need a fallback for edge runtime
     if (process.env.NODE_ENV === 'production') {
       console.error('[MIDDLEWARE ERROR] JWT secret is not configured');
+      throw new Error('JWT secret is not configured');
     }
     // Use fallback only in development
     return new TextEncoder().encode('fallback-secret-for-development');

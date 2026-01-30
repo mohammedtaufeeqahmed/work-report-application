@@ -10,7 +10,7 @@ export async function GET() {
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'Not authenticated',
-      }, { status: 401 });
+      }, { status: 200 });
     }
 
     return NextResponse.json<ApiResponse<SessionUser>>({
