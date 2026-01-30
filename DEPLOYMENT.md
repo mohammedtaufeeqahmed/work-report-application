@@ -1,6 +1,6 @@
 # Deployment Guide - Work Report Application
 
-This document outlines the deployment steps for the Work Report Application built with Next.js 16, SQLite (better-sqlite3), and PWA support.
+This document outlines the deployment steps for the Work Report Application built with Next.js 16, PostgreSQL, and PWA support.
 
 ---
 
@@ -50,8 +50,8 @@ JWT_SECRET=your-super-secure-jwt-secret-key-min-32-chars
 # Alternative JWT Secret (if using NextAuth naming convention)
 # NEXTAUTH_SECRET=your-super-secure-jwt-secret-key-min-32-chars
 
-# Database
-DATABASE_PATH=./data/workreport.db
+# Database (PostgreSQL connection string)
+DATABASE_URL=postgresql://user:password@host:5432/database_name
 
 # Application URL (REQUIRED for production)
 # Must be the full HTTPS URL of your deployed application
@@ -77,8 +77,9 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.com
 
 The following environment variables are **REQUIRED** for production:
 
-1. **JWT_SECRET** or **NEXTAUTH_SECRET**: Used for signing and verifying authentication tokens
-2. **NEXT_PUBLIC_APP_URL**: Full HTTPS URL of your application (e.g., `https://workreport.example.com`)
+1. **DATABASE_URL**: PostgreSQL connection string (e.g., `postgresql://user:password@host:5432/database_name`)
+2. **JWT_SECRET** or **NEXTAUTH_SECRET**: Used for signing and verifying authentication tokens
+3. **NEXT_PUBLIC_APP_URL**: Full HTTPS URL of your application (e.g., `https://workreport.example.com`)
 
 ### Optional Environment Variables
 
@@ -105,7 +106,7 @@ sudo apt install -y nodejs
 node --version
 npm --version
 
-# Install build essentials (required for better-sqlite3)
+# Install build essentials (optional, for native modules)
 sudo apt install -y build-essential python3
 ```
 
@@ -124,8 +125,7 @@ cd work-report-app
 # Install dependencies
 npm ci --production=false
 
-# Create data directory for SQLite
-mkdir -p data
+# Ensure PostgreSQL is running and DATABASE_URL is set in .env.production
 
 # Copy environment file
 cp .env.example .env.production
@@ -161,9 +161,6 @@ Create a `Dockerfile` in the root directory:
 # Dockerfile
 FROM node:20-alpine AS base
 
-# Install dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
-
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -190,9 +187,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Create data directory for SQLite
-RUN mkdir -p ./data && chown -R nextjs:nodejs ./data
-
 USER nextjs
 
 EXPOSE 3000
@@ -215,12 +209,10 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    volumes:
-      - ./data:/app/data
     environment:
       - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_PATH=/app/data/workreport.db
+      - DATABASE_URL=${DATABASE_URL}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
       interval: 30s
@@ -333,34 +325,32 @@ Or run via curl:
 curl -X GET https://your-domain.com/api/db/init
 ```
 
-### Database Backup
+### Database Backup (PostgreSQL)
 
-Create a backup script `backup-db.sh`:
+Create a backup script `backup-db.sh` using `pg_dump`:
 
 ```bash
 #!/bin/bash
-# backup-db.sh
+# backup-db.sh - PostgreSQL backup
 
 BACKUP_DIR="/var/backups/work-report-app"
-DB_PATH="/var/www/work-report-app/data/workreport.db"
 DATE=$(date +%Y%m%d_%H%M%S)
+# Parse DATABASE_URL or set explicitly: PGHOST, PGUSER, PGPASSWORD, PGDATABASE
+export PGPASSWORD="your-db-password"  # Or use .pgpass file
 
 mkdir -p $BACKUP_DIR
-
-# Create backup
-cp $DB_PATH "$BACKUP_DIR/workreport_$DATE.db"
+pg_dump -h localhost -U workreport_user -d workreportapplication -F c -f "$BACKUP_DIR/workreport_$DATE.dump"
 
 # Keep only last 7 days of backups
 find $BACKUP_DIR -type f -mtime +7 -delete
-
-echo "Backup completed: workreport_$DATE.db"
+echo "Backup completed: workreport_$DATE.dump"
 ```
 
 Add to crontab for daily backups:
 
 ```bash
 # Run daily at 2 AM
-0 2 * * * /var/www/work-report-app/backup-db.sh
+0 2 * * * /var/www/work-report-app/scripts/backup-db.sh
 ```
 
 ---
@@ -440,14 +430,17 @@ sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 
 ### Common Issues
 
-#### 1. better-sqlite3 Build Errors
+#### 1. PostgreSQL Connection Errors
 
 ```bash
-# Install build dependencies
-sudo apt install -y build-essential python3
+# Verify DATABASE_URL is set
+echo $DATABASE_URL
 
-# Rebuild native modules
-npm rebuild better-sqlite3
+# Test connection (install psql if needed: sudo apt install postgresql-client)
+psql "$DATABASE_URL" -c "SELECT 1"
+
+# Check PostgreSQL is running
+sudo systemctl status postgresql
 ```
 
 #### 2. Permission Denied on Data Directory
@@ -478,15 +471,14 @@ pm2 logs work-report-app --lines 100
 npm run build 2>&1 | tee build.log
 ```
 
-#### 5. Database Locked Error
+#### 5. Too Many Connections / Pool Errors (PostgreSQL)
 
 ```bash
-# Check for running processes
-fuser /var/www/work-report-app/data/workreport.db
-
-# Ensure only one instance is running
+# Ensure only one app instance is running; check pool settings in code
 pm2 delete all
 pm2 start ecosystem.config.js --env production
+
+# On server, check connection count: psql -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
 #### 6. Authentication Errors (401/403)

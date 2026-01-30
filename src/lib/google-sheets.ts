@@ -2,7 +2,7 @@
  * Google Sheets Integration (Backup Only)
  * 
  * This module handles backing up work reports to Google Sheets.
- * IMPORTANT: This is BACKUP ONLY - all operations use SQLite as primary storage.
+ * IMPORTANT: This is BACKUP ONLY - all operations use PostgreSQL as primary storage.
  * Google Sheets is write-only and non-critical.
  */
 

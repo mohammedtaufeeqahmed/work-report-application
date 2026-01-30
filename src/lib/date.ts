@@ -118,7 +118,7 @@ export function getISTYear(): number {
 
 /**
  * Converts a UTC datetime string (from database) to IST date string (YYYY-MM-DD).
- * Handles formats like "YYYY-MM-DD HH:MM:SS" (SQLite) or ISO strings.
+ * Handles formats like "YYYY-MM-DD HH:MM:SS" (PostgreSQL) or ISO strings.
  */
 export function convertUTCToISTDate(utcDatetime: string): string {
   // Parse the UTC datetime
@@ -130,7 +130,7 @@ export function convertUTCToISTDate(utcDatetime: string): string {
     const isoString = utcDatetime.endsWith('Z') ? utcDatetime : utcDatetime + 'Z';
     date = new Date(isoString);
   } else if (utcDatetime.includes(' ')) {
-    // SQLite/PostgreSQL format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
+    // PostgreSQL format: "YYYY-MM-DD HH:MM:SS" - treat as UTC
     date = new Date(utcDatetime.replace(' ', 'T') + 'Z');
   } else {
     // Just date: "YYYY-MM-DD"

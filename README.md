@@ -8,7 +8,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![SQLite](https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
 <p align="center">
@@ -266,8 +266,8 @@ graph TD
 <br><sub>Styling</sub>
 </td>
 <td align="center" width="96">
-<img src="https://skillicons.dev/icons?i=sqlite" width="48" height="48" alt="SQLite" />
-<br><strong>SQLite</strong>
+<img src="https://skillicons.dev/icons?i=postgresql" width="48" height="48" alt="PostgreSQL" />
+<br><strong>PostgreSQL</strong>
 <br><sub>Database</sub>
 </td>
 </tr>
@@ -281,7 +281,7 @@ graph TD
 | **Charts** | [Recharts](https://recharts.org/) for data visualization |
 | **Forms** | React Hook Form + Zod validation |
 | **Authentication** | Custom JWT-based auth with bcrypt |
-| **Database** | Better-SQLite3 (sync, server-side) with WAL mode |
+| **Database** | PostgreSQL with Drizzle ORM (node-postgres/pg) |
 | **PWA** | next-pwa for Progressive Web App support |
 | **Backup** | Google Sheets API (write-only backup) |
 | **Icons** | Lucide React |
@@ -429,8 +429,8 @@ sudo ./deploy-production.sh
 Create a `.env.local` file in the root directory:
 
 ```env
-# Database
-DATABASE_PATH=./data/workreport.db
+# Database (PostgreSQL connection string)
+DATABASE_URL=postgresql://user:password@host:5432/database_name
 
 # Authentication
 JWT_SECRET=your-super-secret-jwt-key
@@ -510,7 +510,7 @@ work-report-application/
 │   ├── lib/                     # db, auth, queue, utils, google-sheets
 │   ├── types/
 │   └── middleware.ts
-├── data/                        # SQLite database (dev)
+├── data/                        # Optional local data (e.g. backups)
 ├── public/                      # Static assets, PWA icons, manifest
 ├── scripts/                     # backup-db.sh, generate-icons.mjs
 ├── deploy-production.sh        # One-command production deploy (Docker + PostgreSQL)
@@ -535,7 +535,7 @@ flowchart LR
     subgraph Server
         B --> C[🔀 API Routes]
         C --> D[📋 Queue System]
-        D --> E[(🗄️ SQLite DB)]
+        D --> E[(🗄️ PostgreSQL)]
         D -.-> F[📊 Google Sheets]
     end
     
@@ -555,7 +555,7 @@ flowchart LR
     style H fill:#9b59b6,stroke:#333
 ```
 
-> **Note:** Google Sheets is used as a backup only. All operations read from SQLite database.
+> **Note:** Google Sheets is used as a backup only. All operations read from PostgreSQL.
 
 ---
 
@@ -566,7 +566,7 @@ flowchart LR
 - [x] Edit Permissions System
 - [x] Database Maintenance API
 - [x] IST Timezone Support
-- [ ] PostgreSQL migration support
+- [x] PostgreSQL database
 - [ ] Email notifications for report submissions
 - [ ] Advanced reporting with date ranges
 - [ ] Team performance metrics
